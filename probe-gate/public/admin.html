@@ -68,11 +68,32 @@
       }
       function loginView() {
         app.innerHTML = `<div class="card login"><h1>刷量检测</h1><p class="hint">隐藏弹窗后台。真实用户看不到弹窗，爬虫 / 无头浏览器 / 机房 IP 才会弹出。</p>
-          <div class="row"><input id="pw" type="password" placeholder="后台密码" style="flex:1" />
-          <button id="go">登录</button></div><p class="err" id="le"></p></div>`;
+          <div class="row"><input id="pw" type="text" inputmode="text" autocomplete="current-password" spellcheck="false" placeholder="后台密码（可粘贴）" style="flex:1" />
+          <button type="button" id="go">登录</button></div>
+          <div class="row" style="margin-top:8px">
+            <button type="button" class="ghost" id="pastePw">粘贴密码</button>
+            <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer">
+              <input type="checkbox" id="hidePw" /> 隐藏密码
+            </label>
+          </div>
+          <p class="err" id="le"></p></div>`;
+        const pw = $("#pw");
+        // 明确允许粘贴，避免个别环境拦截
+        pw.addEventListener("paste", (e) => { e.stopPropagation(); }, true);
+        $("#hidePw").onchange = (e) => { pw.type = e.target.checked ? "password" : "text"; };
+        $("#pastePw").onclick = async () => {
+          try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+              const text = (await navigator.clipboard.readText()).trim();
+              if (text) { pw.value = text; pw.focus(); return; }
+            }
+          } catch (_) {}
+          $("#le").textContent = "浏览器未授权读取剪贴板，请在密码框内直接 Ctrl+V / 长按粘贴";
+          pw.focus();
+        };
         const go = async () => {
           try {
-            const d = await api("/api/admin/login", { method: "POST", body: JSON.stringify({ password: $("#pw").value }) });
+            const d = await api("/api/admin/login", { method: "POST", body: JSON.stringify({ password: pw.value }) });
             token = d.token;
             sessionStorage.setItem("probe-admin-token", token);
             load();
@@ -81,7 +102,7 @@
           }
         };
         $("#go").onclick = go;
-        $("#pw").onkeydown = (e) => e.key === "Enter" && go();
+        pw.onkeydown = (e) => e.key === "Enter" && go();
       }
       async function load() {
         state.busy = true;
