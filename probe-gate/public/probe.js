@@ -8,7 +8,7 @@
  *
  * 流程：
  * 1. 页面加载后 POST /api/probe（UA、来路、webdriver 等）
- * 2. 服务器判定爬虫 / 无头 / 自动化伪装 / 机房 IP，写入后台统计
+ * 2. 服务器判定爬虫 / 无头 / 自动化伪装 / 模拟器云手机 / 机房 IP，写入后台统计
  * 3. 仅 fake/trap=true 时弹窗；真人与 silent 模式都不弹
  */
 (function () {
@@ -83,6 +83,15 @@
         outer: (typeof outerWidth !== "undefined" ? outerWidth : -1) + "x" + (typeof outerHeight !== "undefined" ? outerHeight : -1),
         screen: (screen && screen.width ? screen.width : 0) + "x" + (screen && screen.height ? screen.height : 0),
         webgl: "",
+        webglVendor: "",
+        platform: navigator.platform || "",
+        vendor: navigator.vendor || "",
+        dpr: (typeof devicePixelRatio !== "undefined" ? devicePixelRatio : 1) || 1,
+        hasOrientation: typeof DeviceOrientationEvent !== "undefined",
+        hasMotion: typeof DeviceMotionEvent !== "undefined",
+        netType: "",
+        emulatorBridge: false,
+        cloudPhoneHook: false,
         cdc: false,
         selenium: false,
         phantom: false,
@@ -122,9 +131,23 @@
         var gl = c.getContext("webgl") || c.getContext("experimental-webgl");
         if (gl) {
           var dbg = gl.getExtension("WEBGL_debug_renderer_info");
-          if (dbg) s.webgl = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "").slice(0, 80);
+          if (dbg) {
+            s.webgl = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "").slice(0, 80);
+            s.webglVendor = String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || "").slice(0, 60);
+          }
         }
       } catch (e5) {}
+      try {
+        var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (conn) s.netType = String(conn.type || conn.effectiveType || "").slice(0, 20);
+      } catch (e6) {}
+      try {
+        // 部分模拟器 / 云手机会注入桥对象
+        if (window.Android || window.android || window.__android || window.BlueStacks || window.nemo || window.NemoAgent) s.emulatorBridge = true;
+        if (window.CloudPhone || window.cloud手机 || window.__CLOUD_PHONE__ || window.RedFinger || window.VMOS) s.cloudPhoneHook = true;
+        var href = String(location.href || "");
+        if (/emulator|cloudphone|cloud-phone|yunshouji/i.test(href)) s.cloudPhoneHook = true;
+      } catch (e7) {}
       return s;
     } catch (e) {
       return empty;

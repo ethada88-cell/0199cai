@@ -5,7 +5,8 @@
  * 1. crawler     爬虫 / 扫描器 / 脚本 UA
  * 2. headless    无头浏览器（webdriver、HeadlessChrome）
  * 3. automation  自动化伪装（隐匿 webdriver / 指纹不一致 / 驱动残留）
- * 4. datacenter  云厂商 / 机房 IP
+ * 4. emulator    模拟器 / 云手机
+ * 5. datacenter  云厂商 / 机房 IP
  *
  * 后台「刷量检测」和前台弹窗用的是同一套结果。
  */
@@ -392,18 +393,71 @@ export function sourceOf(ref, utm, selfHost) {
   return "来路·" + h;
 }
 
+
+/** UA / 文案里直接暴露的模拟器、云手机、虚拟机 */
+const EMULATOR_UA_RE =
+  /Emulator|Android SDK built for|sdk_gphone|google_sdk|Genymotion|BlueStacks|MuMu|NoxPlayer|\bNox\b|LDPlayer|雷电|夜神|逍遥|天天模拟器|mumu|memu|remixos|AndyDroid|Windroy|Droid4X|HMSCore.?Emulator|goldfish|ranchu|ttVM_Hdragon|VirtualBox|VBox|VMware|QEMU|Bochs|云手机|CloudPhone|Cloud.?Phone|CloudMobile|云真机|红手指|多多云|网易.?MUMU|腾讯.?手游助手|腾讯.?云.?手机|华为.?云.?手机|小米.?云.?手机|百度.?云.?手机|vmos|光速虚拟|VMOS|PhoneMaster|模拟器|x86_64.+Mobile|iPhone.?Simulator|iOS.?Simulator/i;
+
+/** WebGL 渲染器：模拟器 / 虚拟显卡常见值 */
+const EMULATOR_WEBGL_RE =
+  /Android Emulator|Emulator|SwiftShader|llvmpipe|softpipe|Gallium|VirGL|Virtio|VMware|SVGA3D|Microsoft Basic Render|Google SwiftShader|ANGLE \(Google|OpenGL ES.+Emulator|Adreno.?\(TM\).?Emulator|Mali.?Emulator|Apple Software Renderer/i;
+
+/**
+ * 模拟器 / 云手机判定。
+ * 关键词直接命中，或「手机 UA + 桌面环境 / 无触控 / 虚拟 GPU」等组合打分。
+ */
+function isEmulatorOrCloudPhone(signals, ua, req) {
+  const s = signals && typeof signals === "object" ? signals : {};
+  const u = String(ua || "");
+  if (EMULATOR_UA_RE.test(u)) return true;
+  if (EMULATOR_WEBGL_RE.test(String(s.webgl || ""))) return true;
+  if (EMULATOR_WEBGL_RE.test(String(s.webglVendor || ""))) return true;
+  if (s.emulatorBridge || s.cloudPhoneHook) return true;
+
+  let score = 0;
+  const uaMobile = Boolean(s.uaMobile) || /Mobile|Android|iPhone|iPad/i.test(u);
+  const platform = String(s.platform || "");
+  const desktopPlat = /Win32|Win64|Windows|MacIntel|MacPPC|Linux x86_64|Linux i686|Linux amd64/i.test(platform);
+  const armPlat = /arm|aarch64|iPhone|iPad/i.test(platform);
+
+  // 手机 UA 跑在桌面 / x86 平台上（经典模拟器）
+  if (uaMobile && desktopPlat && !armPlat) score += 4;
+  // iPhone UA 却不是 Apple 平台
+  if (/iPhone|iPad/i.test(u) && platform && !/iPhone|iPad|MacIntel|MacARM/i.test(platform)) score += 4;
+  // 手机 UA 无触控
+  if (uaMobile && Number(s.touch) === 0) score += 2;
+  // 手机却完全没有方向 / 运动传感器 API
+  if (uaMobile && s.hasOrientation === false && s.hasMotion === false) score += 2;
+  // 屏幕比例异常：极扁或桌面分辨率却挂 Mobile UA
+  try {
+    const parts = String(s.screen || "0x0").split("x");
+    const w = Number(parts[0]) || 0;
+    const h = Number(parts[1]) || 0;
+    if (uaMobile && w >= 1280 && h >= 720 && Number(s.dpr || 1) === 1) score += 1;
+    if (uaMobile && w > 0 && h > 0 && (w / h > 2.4 || h / w > 2.4)) score += 1;
+  } catch (_) {}
+  // Android Chrome 却报 desktop platform 已在上面；再加：Android UA + hw 特别像虚拟机（很多核但无触控）
+  if (/Android/i.test(u) && Number(s.touch) === 0 && Number(s.hw) >= 8) score += 1;
+  // 连接类型 ethernet / 无网络信息却是手机（弱信号）
+  if (uaMobile && String(s.netType || "") === "ethernet") score += 2;
+
+  return score >= 3;
+}
+
 export const KIND_NAME = {
   human: "真实用户",
   crawler: "爬虫",
   datacenter: "机房IP",
   headless: "无头浏览器",
   automation: "自动化伪装",
+  emulator: "模拟器/云手机",
 };
 
-/** 判定优先级：爬虫 UA → 无头 → 自动化伪装 → 机房 IP → 真人 */
+/** 判定优先级：爬虫 → 无头 → 模拟器/云手机 → 自动化伪装 → 机房 IP → 真人 */
 export function classifyKind(ip, ua, signals, req) {
   if (isCrawlerUa(ua)) return "crawler";
   if (isHeadless(signals)) return "headless";
+  if (isEmulatorOrCloudPhone(signals, ua, req)) return "emulator";
   if (isAutomationDisguise(signals, ua, req)) return "automation";
   if (isDatacenterIp(ip)) return "datacenter";
   return "human";

@@ -139,7 +139,7 @@ function flush() {
           if (ev.vid) sum.uv[ev.vid] = (sum.uv[ev.vid] || 0) + 1;
           bump(sum.pages, ev.pageName || ev.page);
           bump(sum.sites, ev.site || "web");
-          if (ev.fake || ev.kind === "crawler" || ev.kind === "datacenter" || ev.kind === "headless" || ev.kind === "automation") {
+          if (ev.fake || ev.kind === "crawler" || ev.kind === "datacenter" || ev.kind === "headless" || ev.kind === "automation" || ev.kind === "emulator") {
             sum.fakePv = (sum.fakePv || 0) + 1;
           } else sum.realPv = (sum.realPv || 0) + 1;
         } else if (ev.type === "click") {
@@ -344,7 +344,7 @@ function readDayLines(day, max = 4000) {
 
 function matchEv(ev, q, type, page, site, kind) {
   if (type && ev.type !== type) return false;
-  if (kind === "fake" && !ev.fake && ev.kind !== "crawler" && ev.kind !== "datacenter" && ev.kind !== "headless" && ev.kind !== "automation") return false;
+  if (kind === "fake" && !ev.fake && ev.kind !== "crawler" && ev.kind !== "datacenter" && ev.kind !== "headless" && ev.kind !== "automation" && ev.kind !== "emulator") return false;
   if (kind && kind !== "fake" && ev.kind !== kind) return false;
   if (site && ev.site !== site) return false;
   if (page) {
