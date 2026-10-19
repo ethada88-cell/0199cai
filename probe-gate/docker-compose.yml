@@ -14,8 +14,11 @@ services:
       PORT: "18471"
       TZ: Asia/Hong_Kong
       DATA_DIR: "/data"
-      ADMIN_USER: "${ADMIN_USER:-admin}"
+      OWNER_USER: "${OWNER_USER:-shuji888}"
+      OWNER_PASS: "${OWNER_PASS:-admin123@}"
       ADMIN_PASS: "${ADMIN_PASS:-admin123@}"
+      ADMIN_USER_KEEP: "${ADMIN_USER_KEEP:-admin}"
+      ADMIN_PASS_KEEP: "${ADMIN_PASS_KEEP:-admin123@}"
       ALLOW_ORIGINS: "${ALLOW_ORIGINS:-*}"
       PROBE_MODE: "${PROBE_MODE:-popup}"
     mem_limit: 512m

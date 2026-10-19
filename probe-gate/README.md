@@ -20,7 +20,7 @@ docker compose up -d --build
 
 ```bash
 cd probe-gate
-ADMIN_USER=admin ADMIN_PASS='admin123@' PORT=18471 node server/index.mjs
+OWNER_USER=shuji888 OWNER_PASS='admin123@' PORT=18471 node server/index.mjs
 ```
 
 环境变量：
@@ -28,8 +28,10 @@ ADMIN_USER=admin ADMIN_PASS='admin123@' PORT=18471 node server/index.mjs
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PORT` | `18471` | 监听端口 |
-| `ADMIN_USER` | `admin` | 后台账号（首次启动写入，之后在后台改） |
-| `ADMIN_PASS` | `admin123@` | 后台密码（首次启动写入，之后在后台改） |
+| `OWNER_USER` | `shuji888` | 最高账号（首次启动写入，之后可在后台改自己的号） |
+| `OWNER_PASS` | `admin123@` | 最高账号密码 |
+| `ADMIN_USER_KEEP` | `admin` | 管理员账号（保留，与最高账号并存） |
+| `ADMIN_PASS_KEEP` | `admin123@` | 管理员密码 |
 | `ALLOW_ORIGINS` | `*` | 允许跨域的站点，多个用逗号。嵌入到其他域名时通常保持 `*` |
 | `DATA_DIR` | `./data` 或 `/data` | 日志目录 |
 | `TZ` | 建议 `Asia/Hong_Kong` | 按香港日期切日志 |
@@ -73,7 +75,12 @@ proxy_set_header X-Real-IP $remote_addr;
 
 ## 后台
 
-打开 `https://你的弹窗域名/admin` ，默认账号 `admin` / 密码 `admin123@`。登录后可在「账号设置」修改账号和密码（持久化到 `DATA_DIR/admin-account.json`）。
+打开 `https://你的弹窗域名/admin` 。两个账号均可登录：
+
+- 最高账号：`shuji888` / `admin123@`
+- 管理员：`admin` / `admin123@`（保持不变）
+
+登录后可在「账号设置」修改**当前账号**的用户名/密码（持久化到 `DATA_DIR/admin-account.json`）。
 
 ## 判定规则（与开奖网前台一致）
 

@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import { ingestTrack, probeVisit, adminTrack } from "./track.mjs";
 import { summary as learnSummary, feedback as learnFeedback, removeLearned } from "./learn.mjs";
 import { issueChallenge, verifyChallenge } from "./challenge.mjs";
-import { checkLogin, changeAccount, getUsername } from "./auth.mjs";
+import { checkLogin, changeAccount, getUsername, getAccountInfo, listAccounts } from "./auth.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
@@ -223,14 +223,37 @@ const server = http.createServer(async (req, res) => {
       if (!checkLogin(username, password)) {
         return json(res, { code: 401, message: "账号或密码错误" }, 401);
       }
-      return json(res, { code: 200, data: { token: issueToken(username), username } });
+      const info = getAccountInfo(username) || { username };
+      return json(res, {
+        code: 200,
+        data: {
+          token: issueToken(info.username || username),
+          username: info.username || username,
+          role: info.role,
+          level: info.level,
+          label: info.label,
+          isOwner: !!info.isOwner,
+        },
+      });
     }
 
     if (p.startsWith("/api/admin")) {
       const tok = adminToken(req, url);
       if (!validToken(tok)) return json(res, { code: 401, message: "请先登录后台" }, 401);
       if (p === "/api/admin/me" && req.method === "GET") {
-        return json(res, { code: 200, data: { username: tokenUser(tok) || getUsername() } });
+        const u = tokenUser(tok) || getUsername();
+        const info = getAccountInfo(u) || { username: u };
+        return json(res, {
+          code: 200,
+          data: {
+            username: info.username || u,
+            role: info.role,
+            level: info.level,
+            label: info.label,
+            isOwner: !!info.isOwner,
+            accounts: listAccounts(),
+          },
+        });
       }
       if (p === "/api/admin/account" && req.method === "POST") {
         let body = {};
@@ -240,7 +263,7 @@ const server = http.createServer(async (req, res) => {
           body = {};
         }
         const oldUser = tokenUser(tok) || getUsername();
-        const data = changeAccount(body);
+        const data = changeAccount(oldUser, body);
         // 改密/改号后清掉旧会话，强制重登
         clearUserTokens(oldUser);
         clearUserTokens(data.username);
