@@ -362,7 +362,7 @@
 </head>
 <body class="embed-app">
    <div class="phone-stage" id="phoneStage">
-  <iframe id="siteEmbed" class="site-embed" title="官网" src="https://m.ojy0871.com/#/" allow="fullscreen; payment; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
+  <iframe id="siteEmbed" class="site-embed" title="官网" src="about:blank" data-src="https://m.ojy0871.com/#/" allow="fullscreen; payment; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
   <button type="button" class="fab-chat" id="fabChat" aria-label="打开客服">客服</button>
   <div class="chat-shell mode-chat" id="chatShell">
   <div class="card">
@@ -1740,6 +1740,7 @@
 
 
       // Mobile site in phone stage; chat is full-screen overlay inside the phone.
+      // 官网 iframe 懒加载：首屏只开客服，点「看官网」再拉 m 站，避免打开卡顿。
       (function bindEmbedShell() {
         document.body.classList.add("embed-app");
         const shell = document.getElementById("chatShell");
@@ -1747,26 +1748,35 @@
         const btnSite = document.getElementById("btnSiteMode");
         const frame = document.getElementById("siteEmbed");
         const params = new URLSearchParams(location.search);
-        // Same-origin mobile proxy first; ?embed= overrides
-        const embedUrl = (params.get("embed") || "https://m.ojy0871.com/#/").trim();
-        if (frame && embedUrl) {
+        const embedUrl = (params.get("embed") || (frame && frame.getAttribute("data-src")) || "https://m.ojy0871.com/#/").trim();
+        let mode = "chat"; // chat | site
+        let siteLoaded = false;
+        function ensureSite() {
+          if (!frame || siteLoaded || !embedUrl) return;
+          siteLoaded = true;
           try { frame.src = embedUrl; } catch (_) {}
         }
-        let mode = "chat"; // chat | site
         function apply() {
           if (!shell) return;
           shell.classList.toggle("mode-site", mode === "site");
           shell.classList.toggle("mode-chat", mode === "chat");
           if (fab) fab.classList.toggle("show", mode === "site");
-          if (btnSite) btnSite.textContent = mode === "chat" ? "看官网" : "回客服";
+          if (btnSite) {
+            btnSite.textContent = mode === "chat" ? "看官网" : "回客服";
+            btnSite.setAttribute("aria-label", mode === "chat" ? "看官网" : "回客服");
+          }
         }
-        function setMode(m) { mode = m; apply(); }
+        function setMode(m) {
+          mode = m;
+          if (mode === "site") ensureSite();
+          apply();
+        }
         if (btnSite) btnSite.addEventListener("click", (e) => {
           e.preventDefault(); e.stopPropagation();
           setMode(mode === "chat" ? "site" : "chat");
         });
         if (fab) fab.addEventListener("click", () => setMode("chat"));
-        // Start on chat (CS link); user taps 看官网 to browse mobile site
+        // Start on chat only — do NOT load embed site until user asks
         setMode("chat");
       })();
 
