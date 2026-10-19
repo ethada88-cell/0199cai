@@ -409,7 +409,8 @@ const EMULATOR_WEBGL_RE =
 function isEmulatorOrCloudPhone(signals, ua, req) {
   const s = signals && typeof signals === "object" ? signals : {};
   const u = String(ua || "");
-  if (EMULATOR_UA_RE.test(u)) return true;
+  const uFull = String(s.uaFull || u);
+  if (EMULATOR_UA_RE.test(u) || EMULATOR_UA_RE.test(uFull)) return true;
   if (EMULATOR_WEBGL_RE.test(String(s.webgl || ""))) return true;
   if (EMULATOR_WEBGL_RE.test(String(s.webglVendor || ""))) return true;
   if (s.emulatorBridge || s.cloudPhoneHook) return true;

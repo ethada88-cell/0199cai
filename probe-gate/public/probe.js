@@ -68,6 +68,7 @@
     try {
       var ua = navigator.userAgent || "";
       var s = {
+        uaFull: ua.slice(0, 240),
         webdriver: Boolean(navigator.webdriver),
         headless: /HeadlessChrome|Headless/i.test(ua),
         plugins: (navigator.plugins && navigator.plugins.length) || 0,
