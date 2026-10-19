@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <!-- ocs-entry-20261019o -->
+  <!-- ocs-entry-20261019q -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <script>
@@ -316,6 +316,34 @@
       width:100%; height:100%;
       border:0; z-index:1; background:#fff;
     }
+    .liuhe-top {
+      display:none;
+      position:absolute; top:0; left:0; right:0; z-index:8;
+      min-height:52px;
+      padding: calc(4px + env(safe-area-inset-top)) 78px 4px 12px;
+      background:#bf242a;
+      align-items:center; justify-content:center;
+      box-sizing:border-box;
+    }
+    body.liuhe-on .liuhe-top { display:flex; }
+    body.liuhe-on .site-embed {
+      top: var(--liuhe-top, 52px);
+      height: calc(100% - var(--liuhe-top, 52px));
+      bottom: auto;
+    }
+    .liuhe-top .brand-logo { height:40px; }
+    .liuhe-menu {
+      position:absolute; right:8px; top:50%; transform:translateY(-50%);
+      margin-top: calc(env(safe-area-inset-top) / 2);
+      border:0; background:transparent; color:#fff;
+      display:flex; align-items:center; gap:2px;
+      font: inherit; font-size:14px; line-height:1; padding:6px 4px;
+      cursor:pointer;
+    }
+    .liuhe-menu svg {
+      width:18px; height:18px; stroke:#fff; fill:none; stroke-width:1.7;
+      stroke-linecap:round; stroke-linejoin:round;
+    }
     .chat-shell {
       position:absolute; inset:0;
       z-index:2;
@@ -394,6 +422,13 @@
 <body class="embed-app">
    <div class="phone-stage" id="phoneStage">
   <div class="stage-main" id="stageMain">
+  <header class="liuhe-top" id="liuheTop">
+    <img class="brand-logo" src="/c/logo-0199.png" alt="0199彩票" />
+    <button type="button" class="liuhe-menu" id="liuheMenu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3.2v2.2M12 18.6v2.2M3.2 12h2.2M18.6 12h2.2M6.1 6.1l1.5 1.5M16.4 16.4l1.5 1.5M17.9 6.1l-1.5 1.5M7.6 16.4l-1.5 1.5"/></svg>
+      <span>菜单</span>
+    </button>
+  </header>
   <iframe id="siteEmbed" class="site-embed" title="官网" src="about:blank" data-src="https://m.ojy0871.com/?showBottomTab=false#/" allow="fullscreen; payment; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
   <button type="button" class="fab-chat" id="fabChat" aria-label="打开客服" hidden>客服</button>
   <div class="chat-shell mode-chat" id="chatShell">
@@ -491,7 +526,7 @@
       <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6h10a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H10l-4 3v-3H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/><path d="M17 9h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1v2l-3-2"/></svg></span>
       <span class="lab">计划群</span>
     </button>
-    <button type="button" data-tab="site" data-hash="https://dactfpsnp1.luzxz22.com/app/#1">
+    <button type="button" data-tab="site" data-hash="/liuhe/news/app/am.html">
       <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5" class="fill"/><path d="m6 16 4-4 3 3 2-2 3 3"/></svg></span>
       <span class="lab">六合资料</span>
     </button>
@@ -1804,8 +1839,9 @@
 
         function siteUrl(hash) {
           let h = String(hash || "#/");
-          // 六合资料等外站地址原样内嵌，不再拼到官网域名上。
+          // 六合资料走本站转发，其它外站地址原样内嵌。
           if (/^https?:\/\//i.test(h)) return h;
+          if (h.charAt(0) === "/" && h.charAt(1) !== "/") return h;
           if (h.charAt(0) !== "#") h = "#/" + h.replace(/^\/?/, "");
           // 官网自带底栏与外壳导航重复。站点读取 ?showBottomTab=false 后不渲染 v-bottom-navigation。
           const q = "showBottomTab=false";
@@ -1830,11 +1866,30 @@
             b.setAttribute("aria-current", on ? "page" : "false");
           });
         }
+        function isLiuhe(hash) {
+          return String(hash || "").indexOf("/liuhe/") >= 0;
+        }
+        function syncLiuheChrome() {
+          const on = mode === "site" && isLiuhe(currentHash);
+          document.body.classList.toggle("liuhe-on", on);
+          const bar = document.getElementById("liuheTop");
+          if (!frame) return;
+          if (!on) {
+            frame.style.top = "";
+            frame.style.height = "";
+            return;
+          }
+          const h = bar ? bar.offsetHeight : 52;
+          document.documentElement.style.setProperty("--liuhe-top", h + "px");
+          frame.style.top = h + "px";
+          frame.style.height = "calc(100% - " + h + "px)";
+        }
         function apply() {
           if (!shell) return;
           shell.classList.toggle("mode-site", mode === "site");
           shell.classList.toggle("mode-chat", mode === "chat");
           if (frame) frame.style.visibility = mode === "site" ? "visible" : "hidden";
+          syncLiuheChrome();
         }
         function setMode(m, hash) {
           mode = m === "site" ? "site" : "chat";
@@ -1865,10 +1920,20 @@
         }
         setMode("chat");
         // 客服先出来。空闲时再预取官网文档，点底部导航时少等源站一圈。
+        const menuBtn = document.getElementById("liuheMenu");
+        if (menuBtn) {
+          menuBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            setMode("site", "#/");
+          });
+        }
+        window.addEventListener("resize", () => { try { syncLiuheChrome(); } catch (_) {} });
         function warmSite(hash) {
           try {
             const href = siteUrl(hash || "#/");
-            const mark = /^https?:\/\//i.test(String(hash || "")) ? "ext" : "1";
+            const raw = String(hash || "");
+            const external = /^https?:\/\//i.test(raw) || (raw.charAt(0) === "/" && raw.charAt(1) !== "/");
+            const mark = external ? "ext" : "1";
             if (document.querySelector('link[data-ocs-warm="' + mark + '"]')) return;
             const link = document.createElement("link");
             link.rel = "prefetch";
@@ -1883,7 +1948,8 @@
             const btn = e.target && e.target.closest ? e.target.closest("button[data-tab]") : null;
             if (!btn || btn.getAttribute("data-tab") !== "site") return;
             const hash = btn.getAttribute("data-hash") || "#/";
-            warmSite(/^https?:\/\//i.test(hash) ? hash : "#/");
+            const external = /^https?:\/\//i.test(hash) || (hash.charAt(0) === "/" && hash.charAt(1) !== "/");
+            warmSite(external ? hash : "#/");
           }, { passive: true });
         }
         const kickWarm = () => warmSite();
