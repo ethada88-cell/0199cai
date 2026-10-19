@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <!-- ocs-entry-20261019m -->
+  <!-- ocs-entry-20261019n -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <script>
@@ -68,6 +68,9 @@
     })();
   </script>
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <link rel="preconnect" href="https://m.ojy0871.com" />
+  <link rel="preconnect" href="https://h5cmd-aly.vdokmj.cn" crossorigin />
+  <link rel="dns-prefetch" href="https://minio-img-6.fgsas.cn" />
   <title>在线咨询</title>
   <style>
     :root {
@@ -1859,6 +1862,28 @@
           }, true);
         }
         setMode("chat");
+        // 客服先出来。空闲时再预取官网文档，点底部导航时少等源站一圈。
+        function warmSite() {
+          try {
+            const href = siteUrl("#/");
+            if (document.querySelector('link[data-ocs-warm="1"]')) return;
+            const link = document.createElement("link");
+            link.rel = "prefetch";
+            link.as = "document";
+            link.href = href;
+            link.setAttribute("data-ocs-warm", "1");
+            document.head.appendChild(link);
+          } catch (_) {}
+        }
+        if (tabbar) {
+          tabbar.addEventListener("pointerdown", (e) => {
+            const btn = e.target && e.target.closest ? e.target.closest("button[data-tab]") : null;
+            if (btn && btn.getAttribute("data-tab") === "site") warmSite();
+          }, { passive: true });
+        }
+        const kickWarm = () => warmSite();
+        if (window.requestIdleCallback) requestIdleCallback(kickWarm, { timeout: 1800 });
+        else setTimeout(kickWarm, 1200);
         try {
           window.__ocsSetChatMode = setMode;
           window.__ocsClickTab = function (label) {
