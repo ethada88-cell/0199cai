@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <!-- ocs-entry-20261019k -->
+  <!-- ocs-entry-20261019l -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <script>
@@ -366,6 +366,8 @@
     }
     .site-tabbar button:not(.active) .ico img { filter: brightness(0) invert(82%); }
     .site-tabbar button.active .ico img { filter: brightness(0) invert(1); }
+    .site-tabbar button .ico img.reception,
+    .site-tabbar button.active .ico img.reception { filter: none; }
     .site-tabbar button .ico svg .fill,
     .site-tabbar button .ico svg circle.fill { fill:currentColor; stroke:none; }
     .site-tabbar button.active { color:#fff; }
@@ -467,7 +469,7 @@
   </div>
   <nav class="site-tabbar" id="siteTabbar" aria-label="官网底部导航">
     <button type="button" class="active" data-tab="chat" data-hash="">
-      <span class="ico" aria-hidden="true"><img src="/c/reception.png" alt="" /></span>
+      <span class="ico" aria-hidden="true"><img class="reception" src="/c/reception.png" alt="" /></span>
       <span class="lab">接待</span>
     </button>
     <button type="button" data-tab="site" data-hash="#/">
