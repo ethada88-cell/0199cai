@@ -65,7 +65,7 @@
             <input id="user" name="username" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请输入账号" value="admin" />
           </div>
           <div class="field">密码
-            <input id="pw" name="password" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请输入密码，可直接粘贴" />
+            <input id="pw" name="password" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请输入密码，可直接粘贴" value="admin123@" />
           </div>
         </div>
         <div class="row" style="margin-top:12px">
@@ -138,8 +138,7 @@
         const user = $("#user");
         const pw = $("#pw");
         if (user && !user.value) user.value = "admin";
-        if (pw) pw.value = "";
-        try { pw && pw.focus(); } catch (_) {}
+        try { pw && pw.select(); } catch (_) {}
       }
       function logout() {
         showLogin("");
