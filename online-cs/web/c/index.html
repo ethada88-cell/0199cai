@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <!-- ocs-entry-20261019b -->
+  <!-- ocs-entry-20261019c -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <script>
@@ -388,7 +388,7 @@
 <body class="embed-app">
    <div class="phone-stage" id="phoneStage">
   <div class="stage-main" id="stageMain">
-  <iframe id="siteEmbed" class="site-embed" title="官网" src="about:blank" data-src="https://m.ojy0871.com/#/" allow="fullscreen; payment; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
+  <iframe id="siteEmbed" class="site-embed" title="官网" src="about:blank" data-src="https://m.ojy0871.com/?showBottomTab=false#/" allow="fullscreen; payment; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
   <button type="button" class="fab-chat" id="fabChat" aria-label="打开客服" hidden>客服</button>
   <div class="chat-shell mode-chat" id="chatShell">
   <div class="card">
@@ -1810,7 +1810,10 @@
         function siteUrl(hash) {
           let h = String(hash || "#/");
           if (h.charAt(0) !== "#") h = "#/" + h.replace(/^\/?/, "");
-          return siteOrigin + "/" + h;
+          // 官网自带底栏与外壳导航重复。站点读取 ?showBottomTab=false 后不渲染 v-bottom-navigation。
+          const q = "showBottomTab=false";
+          const search = h.indexOf("showBottomTab=") >= 0 ? "" : ("?" + q);
+          return siteOrigin + "/" + search + h;
         }
         function ensureSite(hash) {
           if (!frame) return;
