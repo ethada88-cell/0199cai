@@ -14,7 +14,8 @@ services:
       PORT: "18471"
       TZ: Asia/Hong_Kong
       DATA_DIR: "/data"
-      ADMIN_PASS: "${ADMIN_PASS}"
+      ADMIN_USER: "${ADMIN_USER:-admin}"
+      ADMIN_PASS: "${ADMIN_PASS:-admin123@}"
       ALLOW_ORIGINS: "${ALLOW_ORIGINS:-*}"
       PROBE_MODE: "${PROBE_MODE:-popup}"
     mem_limit: 512m

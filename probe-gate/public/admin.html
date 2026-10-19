@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- 流量监测后台：密码为环境变量 ADMIN_PASS -->
+<!-- 流量监测后台：默认账号 admin / admin123@，可在后台修改 -->
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -17,6 +17,9 @@
       .okmsg { color: var(--ok); font-size: 13px; }
       .card { background: var(--card); border-radius: 14px; padding: 18px; box-shadow: 0 1px 10px #00000010; margin-bottom: 14px; }
       .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+      .stack { display:flex; flex-direction:column; gap:10px; }
+      .stack label { display:flex; flex-direction:column; gap:6px; font-size:13px; color:#606266; }
+      .stack input { width:100%; height:40px; }
       input, select, button, textarea { font: inherit; }
       input, select { height: 36px; border: 1px solid #dcdfe6; border-radius: 8px; padding: 0 10px; background:#fff; }
       textarea { width:100%; min-height:72px; border:1px solid #dcdfe6; border-radius:8px; padding:10px; resize:vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
@@ -55,7 +58,8 @@
       const ORIGIN = location.origin;
       const EMBED = `<script src="${ORIGIN}/probe.js"><\/script>`;
       let token = sessionStorage.getItem("probe-admin-token") || "";
-      let state = { from: day(0), to: day(0), kind: "", q: "", offset: 0, pack: null, err: "", ok: "", busy: false, learn: null };
+      let username = sessionStorage.getItem("probe-admin-user") || "";
+      let state = { from: day(0), to: day(0), kind: "", q: "", offset: 0, pack: null, err: "", ok: "", busy: false, learn: null, accountMsg: "", accountErr: "" };
 
       function day(off) {
         const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Hong_Kong", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -91,18 +95,25 @@
       }
       function logout() {
         token = "";
+        username = "";
         sessionStorage.removeItem("probe-admin-token");
+        sessionStorage.removeItem("probe-admin-user");
         loginView();
       }
       function loginView() {
         app.innerHTML = `<div class="card login">
           <h1>流量监测后台</h1>
-          <p class="hint">登录后可查看假量统计、滑动验证情况，并对明细纠错。地址：${ORIGIN}/admin</p>
-          <div class="row">
-            <input id="pw" type="text" inputmode="text" autocomplete="current-password" spellcheck="false" placeholder="后台密码（可粘贴）" style="flex:1" />
-            <button type="button" id="go">登录</button>
+          <p class="hint">账号密码登录。默认账号 <code>admin</code>，默认密码 <code>admin123@</code>。登录后可在「账号设置」修改。</p>
+          <div class="stack">
+            <label>账号
+              <input id="user" type="text" autocomplete="username" spellcheck="false" placeholder="账号" value="admin" />
+            </label>
+            <label>密码
+              <input id="pw" type="text" inputmode="text" autocomplete="current-password" spellcheck="false" placeholder="密码（可粘贴）" />
+            </label>
           </div>
-          <div class="row" style="margin-top:4px">
+          <div class="row" style="margin-top:12px">
+            <button type="button" id="go">登录</button>
             <button type="button" class="ghost" id="pastePw">粘贴密码</button>
             <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer">
               <input type="checkbox" id="hidePw" /> 隐藏密码
@@ -110,8 +121,10 @@
           </div>
           <p class="err" id="le"></p>
         </div>`;
+        const user = $("#user");
         const pw = $("#pw");
         pw.addEventListener("paste", (e) => { e.stopPropagation(); }, true);
+        user.addEventListener("paste", (e) => { e.stopPropagation(); }, true);
         $("#hidePw").onchange = (e) => { pw.type = e.target.checked ? "password" : "text"; };
         $("#pastePw").onclick = async () => {
           try {
@@ -125,23 +138,79 @@
         };
         const go = async () => {
           try {
-            const d = await api("/api/admin/login", { method: "POST", body: JSON.stringify({ password: pw.value }) });
+            const d = await api("/api/admin/login", {
+              method: "POST",
+              body: JSON.stringify({ username: user.value.trim(), password: pw.value }),
+            });
             token = d.token;
+            username = d.username || user.value.trim();
             sessionStorage.setItem("probe-admin-token", token);
+            sessionStorage.setItem("probe-admin-user", username);
             load();
           } catch (e) {
-            $("#le").textContent = e.message || "密码错误";
+            $("#le").textContent = e.message || "账号或密码错误";
           }
         };
         $("#go").onclick = go;
+        user.onkeydown = (e) => e.key === "Enter" && pw.focus();
         pw.onkeydown = (e) => e.key === "Enter" && go();
         pw.focus();
+      }
+      async function saveAccount() {
+        const currentPassword = $("#curPw").value;
+        const newUsername = $("#newUser").value.trim();
+        const newPassword = $("#newPw").value;
+        const newPassword2 = $("#newPw2").value;
+        state.accountErr = "";
+        state.accountMsg = "";
+        if (!currentPassword) {
+          state.accountErr = "请填写当前密码";
+          render();
+          return;
+        }
+        if (!newUsername && !newPassword) {
+          state.accountErr = "请填写新账号或新密码";
+          render();
+          return;
+        }
+        if (newPassword && newPassword !== newPassword2) {
+          state.accountErr = "两次新密码不一致";
+          render();
+          return;
+        }
+        try {
+          const d = await api("/api/admin/account", {
+            method: "POST",
+            body: JSON.stringify({ currentPassword, newUsername: newUsername || undefined, newPassword: newPassword || undefined }),
+          });
+          token = "";
+          username = "";
+          sessionStorage.removeItem("probe-admin-token");
+          sessionStorage.removeItem("probe-admin-user");
+          loginView();
+          $("#le").textContent = "";
+          const tip = document.createElement("p");
+          tip.className = "okmsg";
+          tip.textContent = (d && d.message) || "账号已更新，请用新账号重新登录";
+          $("#le").replaceWith(tip);
+          if (d && d.username) $("#user").value = d.username;
+        } catch (e) {
+          state.accountErr = e.message || "修改失败";
+          render();
+        }
       }
       async function load() {
         state.busy = true;
         render();
         const p = new URLSearchParams({ from: state.from, to: state.to, kind: state.kind, q: state.q, offset: String(state.offset), limit: "80" });
         try {
+          try {
+            const me = await api("/api/admin/me");
+            if (me && me.username) {
+              username = me.username;
+              sessionStorage.setItem("probe-admin-user", username);
+            }
+          } catch (_) {}
           state.pack = await api("/api/admin/track?" + p);
           if (state.pack.from) state.from = state.pack.from;
           if (state.pack.to) state.to = state.pack.to;
@@ -192,11 +261,39 @@
           <div class="top">
             <div>
               <h1>流量监测后台 <span class="pill">probe-gate</span></h1>
-              <p class="hint" style="margin:6px 0 0">滑动验证拦截假量 · 滑过记真量 · 自学习纠错</p>
+              <p class="hint" style="margin:6px 0 0">当前账号 <strong>${username || "admin"}</strong> · 滑动验证拦截假量 · 滑过记真量 · 自学习纠错</p>
             </div>
             <div class="row" style="margin:0">
               <a class="ghost" href="/demo.html" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:8px;text-decoration:none;background:#eef2ff;color:#1e3a8a">打开演示页</a>
+              <button type="button" class="ghost" id="gotoAccount">账号设置</button>
               <button type="button" class="danger" id="logout">退出登录</button>
+            </div>
+          </div>
+
+          <div class="card" id="accountCard">
+            <h3>账号设置</h3>
+            <p class="hint">可修改登录账号和密码。修改成功后需重新登录。密码至少 6 位。</p>
+            <div class="stack" style="max-width:420px">
+              <label>当前密码（必填）
+                <input id="curPw" type="text" autocomplete="current-password" spellcheck="false" placeholder="当前密码" />
+              </label>
+              <label>新账号（可选，留空则不改）
+                <input id="newUser" type="text" autocomplete="username" spellcheck="false" placeholder="新账号，当前：${(username || "").replace(/"/g, "&quot;")}" />
+              </label>
+              <label>新密码（可选，留空则不改）
+                <input id="newPw" type="text" autocomplete="new-password" spellcheck="false" placeholder="新密码" />
+              </label>
+              <label>确认新密码
+                <input id="newPw2" type="text" autocomplete="new-password" spellcheck="false" placeholder="再输入一次新密码" />
+              </label>
+            </div>
+            <div class="row" style="margin-top:12px;margin-bottom:0">
+              <button type="button" id="saveAccount">保存修改</button>
+              <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer">
+                <input type="checkbox" id="hideAccPw" /> 隐藏密码
+              </label>
+              ${state.accountMsg ? `<span class="okmsg">${state.accountMsg}</span>` : ""}
+              ${state.accountErr ? `<span class="err">${state.accountErr}</span>` : ""}
             </div>
           </div>
 
@@ -294,6 +391,20 @@
           </div>`;
 
         $("#logout").onclick = logout;
+        $("#gotoAccount").onclick = () => {
+          const el = $("#accountCard");
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+          $("#curPw") && $("#curPw").focus();
+        };
+        $("#hideAccPw").onchange = (e) => {
+          const t = e.target.checked ? "password" : "text";
+          ["curPw", "newPw", "newPw2"].forEach((id) => { const el = $("#" + id); if (el) el.type = t; });
+        };
+        ["curPw", "newPw", "newPw2", "newUser"].forEach((id) => {
+          const el = $("#" + id);
+          if (el) el.addEventListener("paste", (ev) => { ev.stopPropagation(); }, true);
+        });
+        $("#saveAccount").onclick = saveAccount;
         $("#copyEmbed").onclick = async () => {
           const ok = await copyText(EMBED);
           $("#copyTip").textContent = ok ? "已复制嵌入代码" : "复制失败，请手动选中复制";

@@ -20,7 +20,7 @@ docker compose up -d --build
 
 ```bash
 cd probe-gate
-ADMIN_PASS='你的后台密码' PORT=18471 node server/index.mjs
+ADMIN_USER=admin ADMIN_PASS='admin123@' PORT=18471 node server/index.mjs
 ```
 
 环境变量：
@@ -28,7 +28,8 @@ ADMIN_PASS='你的后台密码' PORT=18471 node server/index.mjs
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PORT` | `18471` | 监听端口 |
-| `ADMIN_PASS` | `admin123@` | 后台密码，务必改掉 |
+| `ADMIN_USER` | `admin` | 后台账号（首次启动写入，之后在后台改） |
+| `ADMIN_PASS` | `admin123@` | 后台密码（首次启动写入，之后在后台改） |
 | `ALLOW_ORIGINS` | `*` | 允许跨域的站点，多个用逗号。嵌入到其他域名时通常保持 `*` |
 | `DATA_DIR` | `./data` 或 `/data` | 日志目录 |
 | `TZ` | 建议 `Asia/Hong_Kong` | 按香港日期切日志 |
@@ -72,7 +73,7 @@ proxy_set_header X-Real-IP $remote_addr;
 
 ## 后台
 
-打开 `https://你的弹窗域名/admin` ，用 `ADMIN_PASS` 登录。
+打开 `https://你的弹窗域名/admin` ，默认账号 `admin` / 密码 `admin123@`。登录后可在「账号设置」修改账号和密码（持久化到 `DATA_DIR/admin-account.json`）。
 
 ## 判定规则（与开奖网前台一致）
 
@@ -99,7 +100,9 @@ probe-gate/
 
 - `POST /api/probe` 判定是否弹窗  
 - `POST /api/track` 关闭弹窗 / 点击等事件  
-- `POST /api/admin/login`  
+- `POST /api/admin/login`（账号+密码）  
+- `POST /api/admin/account`（改账号/密码）  
+- `GET /api/admin/me`  
 - `GET /api/admin/track`
 
 ## 自学习（越用越准）

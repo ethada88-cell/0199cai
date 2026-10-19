@@ -4,7 +4,8 @@
  * 接口：
  *   POST /api/probe         前端问：这次访问要不要弹窗
  *   POST /api/track         记录关闭弹窗等事件
- *   POST /api/admin/login   后台登录
+ *   POST /api/admin/login   后台登录（账号+密码）
+ *   POST /api/admin/account 修改账号密码
  *   GET  /api/admin/track   刷量统计
  * 静态：
  *   /probe.js               给任意网站嵌入的脚本
@@ -20,12 +21,12 @@ import { fileURLToPath } from "node:url";
 import { ingestTrack, probeVisit, adminTrack } from "./track.mjs";
 import { summary as learnSummary, feedback as learnFeedback, removeLearned } from "./learn.mjs";
 import { issueChallenge, verifyChallenge } from "./challenge.mjs";
+import { checkLogin, changeAccount, getUsername } from "./auth.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
 const PORT = Number(process.env.PORT || 18471);
-const ADMIN_PASS = process.env.ADMIN_PASS || "admin123@"; // 部署后务必改掉
-const tokens = new Map(); // 内存 token，重启失效
+const tokens = new Map(); // token -> { exp, username }
 const TOKEN_MS = 12 * 60 * 60 * 1000;
 
 function json(res, data, status = 200, extra = {}) {
@@ -77,28 +78,31 @@ async function readBody(req, max = 120000) {
   return Buffer.concat(chunks);
 }
 
-/** 常量时间比较，降低撞密码时的计时差异 */
-function checkPass(p) {
-  const a = Buffer.from(String(p || ""));
-  const b = Buffer.from(ADMIN_PASS);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
-}
-
-function issueToken() {
+function issueToken(username) {
   const token = crypto.randomBytes(24).toString("hex");
-  tokens.set(token, Date.now() + TOKEN_MS);
+  tokens.set(token, { exp: Date.now() + TOKEN_MS, username: String(username || "") });
   return token;
 }
 
 function validToken(token) {
-  const exp = tokens.get(String(token || ""));
-  if (!exp) return false;
-  if (exp < Date.now()) {
+  const row = tokens.get(String(token || ""));
+  if (!row) return false;
+  if (row.exp < Date.now()) {
     tokens.delete(token);
     return false;
   }
   return true;
+}
+
+function tokenUser(token) {
+  const row = tokens.get(String(token || ""));
+  return row && row.exp >= Date.now() ? row.username : "";
+}
+
+function clearUserTokens(username) {
+  for (const [t, row] of tokens) {
+    if (row && row.username === username) tokens.delete(t);
+  }
 }
 
 function adminToken(req, url) {
@@ -214,12 +218,34 @@ const server = http.createServer(async (req, res) => {
       } catch {
         body = {};
       }
-      if (!checkPass(body.password || "")) return json(res, { code: 401, message: "密码错误" }, 401);
-      return json(res, { code: 200, data: { token: issueToken() } });
+      const username = String(body.username || body.user || "").trim();
+      const password = String(body.password || "");
+      if (!checkLogin(username, password)) {
+        return json(res, { code: 401, message: "账号或密码错误" }, 401);
+      }
+      return json(res, { code: 200, data: { token: issueToken(username), username } });
     }
 
     if (p.startsWith("/api/admin")) {
-      if (!validToken(adminToken(req, url))) return json(res, { code: 401, message: "请先登录后台" }, 401);
+      const tok = adminToken(req, url);
+      if (!validToken(tok)) return json(res, { code: 401, message: "请先登录后台" }, 401);
+      if (p === "/api/admin/me" && req.method === "GET") {
+        return json(res, { code: 200, data: { username: tokenUser(tok) || getUsername() } });
+      }
+      if (p === "/api/admin/account" && req.method === "POST") {
+        let body = {};
+        try {
+          body = JSON.parse((await readBody(req, 8000)).toString("utf8") || "{}");
+        } catch {
+          body = {};
+        }
+        const oldUser = tokenUser(tok) || getUsername();
+        const data = changeAccount(body);
+        // 改密/改号后清掉旧会话，强制重登
+        clearUserTokens(oldUser);
+        clearUserTokens(data.username);
+        return json(res, { code: 200, data });
+      }
       if (p === "/api/admin/track") {
         return json(res, { code: 200, data: adminTrack(Object.fromEntries(url.searchParams)) });
       }
