@@ -104,26 +104,28 @@
     }
     .head {
       background:#c62828;
-      color:#fff; padding: calc(8px + env(safe-area-inset-top)) 12px 10px;
+      color:#fff; padding: calc(8px + env(safe-area-inset-top)) 48px 10px 40px;
       flex-shrink:0; display:flex; align-items:center; justify-content:center;
       position:relative; min-height:52px;
     }
     .brand {
       display:flex; flex-direction:row; align-items:baseline; justify-content:center;
-      gap:6px; line-height:1; text-align:center; max-width:70%;
+      gap:6px; line-height:1; text-align:center; max-width:100%;
+      min-width:0;
     }
     .brand-mark {
-      font-weight:900; font-size:26px; letter-spacing:.4px;
-      color:#ffd54f; text-shadow:0 1px 0 rgba(80,20,0,.28);
+      font-weight:900; font-size:24px; letter-spacing:.4px;
+      color:#ffd54f !important; text-shadow:0 1px 0 rgba(80,20,0,.28);
       font-family:Arial,"Helvetica Neue","PingFang SC",sans-serif;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:58vw;
     }
     .brand-sub {
-      font-size:13px; font-weight:700; color:#fff;
-      letter-spacing:.5px; opacity:.98; white-space:nowrap;
+      font-size:13px; font-weight:700; color:#fff !important;
+      letter-spacing:.5px; opacity:.98; white-space:nowrap; flex-shrink:0;
     }
     .head-actions {
-      position:absolute; right:10px; top:50%; transform:translateY(-30%);
-      display:flex; gap:8px; align-items:center;
+      position:absolute; right:8px; top:50%; transform:translateY(-30%);
+      display:flex; gap:6px; align-items:center;
     }
     .head-actions button {
       width:28px; height:28px; border:0; background:transparent; color:#fff;
@@ -1113,15 +1115,21 @@
           return;
         }
         const title = (meta.seat_title || meta.widget_title || "").trim() || meta.name || "在线咨询";
-        const brand = (meta.widget_title || meta.name || title).trim() || "9065.COM";
+        // 顶栏：金色主标题（短）+ 白色副标题「彩票网」，对齐截图 9065.COM + 彩票网
+        let brand = (meta.widget_title || "").trim();
+        if (!brand || brand.length > 14) {
+          const hostLike = String(meta.name || "").match(/[A-Za-z0-9][A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+          brand = hostLike ? hostLike[0].toUpperCase() : "9065.COM";
+        }
         defaultAgentName = title;
         document.getElementById("coName").textContent = brand;
         const subEl = document.getElementById("coSub");
         const sub = (meta.widget_subtitle || "").trim() || "彩票网";
         subEl.hidden = false;
-        subEl.textContent = sub.length > 12 ? sub.slice(0, 12) : sub;
+        subEl.textContent = sub.length > 8 ? sub.slice(0, 8) : sub;
         document.title = title + " · 在线咨询";
-        syncAgentCard(title, ("欢迎联系我们，官方网址" + (meta.name || brand)).slice(0, 28));
+        const wel = ("欢迎联系我们，官方网址" + (meta.name || brand)).replace(/\s+/g, "");
+        syncAgentCard(title, wel.length > 26 ? wel.slice(0, 26) + "…" : wel);
         const badge = document.getElementById("hoursBadge");
         badge.hidden = true;
 
