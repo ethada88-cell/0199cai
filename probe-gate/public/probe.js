@@ -1,27 +1,28 @@
 /**
- * 隐藏弹窗前端（丢到任意网站即可）
+ * 流量无感检测（嵌入任意网站）
  *
- * 用法：<script src="https://弹窗服务器/probe.js"></script>
+ * 用法：<script src="https://你的域名/probe.js"></script>
+ *
+ * 默认「无感」：只上报判定结果到后台，页面不弹任何窗。
+ * 若要恢复弹窗：<script src=".../probe.js" data-mode="popup"></script>
  *
  * 流程：
- * 1. 页面加载后 POST /api/probe（带 UA、来路、webdriver 信号）
- * 2. 服务器判定是爬虫 / 无头 / 机房 IP 才返回 trap=true
- * 3. 只有 trap=true 才画出「访问核验」遮罩；真人看不到任何东西
- * 4. 点「关闭」后 sessionStorage 记一次，本标签页不再弹
+ * 1. 页面加载后 POST /api/probe（UA、来路、webdriver 等）
+ * 2. 服务器判定爬虫 / 无头 / 机房 IP，写入后台统计
+ * 3. 无感模式不渲染遮罩；popup 模式且 trap=true 才显示「访问核验」
  */
 (function () {
-  var KEY = "probe-trap-ok"; // 本标签页已关闭过弹窗
+  var KEY = "probe-trap-ok";
   var script = document.currentScript;
   var BASE = "";
   try {
-    // 接口默认就是脚本所在域名，方便跨站嵌入
     BASE = new URL(".", script && script.src ? script.src : location.href).href.replace(/\/$/, "");
   } catch (e) {
     BASE = "";
   }
   if (script && script.getAttribute("data-api")) BASE = String(script.getAttribute("data-api")).replace(/\/$/, "");
   var SITE = (script && script.getAttribute("data-site")) || location.host || "web";
-  // 路径里带这些字就不弹（默认跳过后台）
+  var MODE = ((script && script.getAttribute("data-mode")) || "silent").toLowerCase(); // silent | popup
   var skip = ((script && script.getAttribute("data-skip")) || "admin").split(",").map(function (s) {
     return s.trim();
   });
@@ -62,7 +63,6 @@
     }
   }
 
-  // 给服务器的额外信号：自动化工具几乎都会露出 webdriver
   function signals() {
     try {
       return {
@@ -113,7 +113,6 @@
     document.head.appendChild(css);
   }
 
-  /** 画出遮罩。真实用户根本走不到这里。 */
   function show(gate) {
     injectCss();
     document.documentElement.classList.add("bot-gate-on");
@@ -163,9 +162,11 @@
 
   function run() {
     if (shouldSkip()) return;
-    try {
-      if (sessionStorage.getItem(KEY) === "1") return;
-    } catch (e) {}
+    if (MODE === "popup") {
+      try {
+        if (sessionStorage.getItem(KEY) === "1") return;
+      } catch (e) {}
+    }
     post("/api/probe", {
       page: pagePath() + location.search,
       pageTitle: document.title,
@@ -174,9 +175,12 @@
       signals: signals(),
       ref: document.referrer || "",
       utm: utm(),
+      mode: MODE,
     })
       .then(function (j) {
         var data = j && (j.data || j);
+        // 无感：只统计，不弹窗
+        if (MODE !== "popup") return;
         if (data && data.trap) show(data);
       })
       .catch(function () {});

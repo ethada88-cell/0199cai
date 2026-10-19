@@ -273,7 +273,7 @@ export function probeVisit(req, body = {}) {
       site: body.site,
       ref: cls.ref,
       source: cls.source,
-      label: cls.trap ? "假量弹窗" : "真实访问",
+      label: cls.trap ? (String(process.env.PROBE_MODE || "silent").toLowerCase() === "popup" ? "假量弹窗" : "假量检测") : "真实访问",
     },
     { ip: cls.ip, ua: cls.ua, now: Date.now(), cls, host: cls.host }
   );
@@ -281,8 +281,11 @@ export function probeVisit(req, body = {}) {
     queue.push(ev);
     setImmediate(flush);
   }
+  const mode = String(process.env.PROBE_MODE || "silent").toLowerCase();
+  const showTrap = mode === "popup" && cls.trap;
   return {
-    trap: cls.trap,
+    trap: showTrap,
+    silent: mode !== "popup",
     kind: cls.kind,
     kindName: cls.kindName,
     source: cls.source,

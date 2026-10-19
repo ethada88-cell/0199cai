@@ -67,7 +67,7 @@
         return j.data;
       }
       function loginView() {
-        app.innerHTML = `<div class="card login"><h1>刷量检测</h1><p class="hint">隐藏弹窗后台。真实用户看不到弹窗，爬虫 / 无头浏览器 / 机房 IP 才会弹出。</p>
+        app.innerHTML = `<div class="card login"><h1>刷量检测</h1><p class="hint">无感检测后台。访客页面不弹窗；爬虫 / 无头浏览器 / 机房 IP 会记入假量统计。</p>
           <div class="row"><input id="pw" type="text" inputmode="text" autocomplete="current-password" spellcheck="false" placeholder="后台密码（可粘贴）" style="flex:1" />
           <button type="button" id="go">登录</button></div>
           <div class="row" style="margin-top:8px">
@@ -140,7 +140,7 @@
             ? arr.map((x) => `<li><button type="button" data-q="${x.name.replace(/"/g, "")}">${x.name}</button><em>${x.count}</em></li>`).join("")
             : `<p class="hint">暂无</p>`;
         app.innerHTML = `<h1>刷量检测</h1>
-          <p class="hint">与前台弹窗同一套判定：爬虫、无头浏览器、机房 IP 才弹窗，真实用户看不到。</p>
+          <p class="hint">与前台同一套判定（无感）：爬虫、无头浏览器、机房 IP 记为假量，真实用户不干扰。</p>
           <div class="card">
             <div class="row">
               <input type="date" id="from" value="${state.from}" />
@@ -163,7 +163,7 @@
               <div class="stat"><span>真实 PV</span><strong>${s.realPv || 0}</strong><em>判定为真人</em></div>
               <div class="stat"><span>假量 PV</span><strong>${s.fakePv || 0}</strong><em>爬虫 / 机房</em></div>
               <div class="stat"><span>假量占比</span><strong>${rate}%</strong><em>假量 / 总 PV</em></div>
-              <div class="stat"><span>弹窗曝光</span><strong>${s.trap || 0}</strong><em>只有假量能看见</em></div>
+              <div class="stat"><span>弹窗曝光</span><strong>${s.trap || 0}</strong><em>判定为假量次数</em></div>
               <div class="stat"><span>点关闭</span><strong>${s.trapClose || 0}</strong><em>关弹窗后浏览</em></div>
             </div>
           </div>

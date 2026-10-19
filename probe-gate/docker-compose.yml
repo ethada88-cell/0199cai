@@ -16,6 +16,7 @@ services:
       DATA_DIR: "/data"
       ADMIN_PASS: "${ADMIN_PASS}"
       ALLOW_ORIGINS: "${ALLOW_ORIGINS:-*}"
+      PROBE_MODE: "${PROBE_MODE:-silent}"
     mem_limit: 512m
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18471/probe.js').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
