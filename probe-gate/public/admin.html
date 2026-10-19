@@ -113,15 +113,16 @@
         const site = (state.siteName || "").trim();
         const siteAttr = site ? ` data-site="${site.replace(/"/g, "")}"` : "";
         const src = probeUrl();
+        // 注意：源码里必须写成 <\/script>，否则会截断本页 <script> 导致整页乱码
         if (type === "framework") {
           return [
-            `<!-- 框架站（Vue / React / Next / Nuxt / uni-app H5 等）推荐写法 -->`,
-            `<script src="${src}" data-api="${ORIGIN}"${siteAttr} data-skip="admin,login"></script>`,
+            "<!-- 框架站（Vue / React / Next / Nuxt / uni-app H5 等）推荐写法 -->",
+            `<script src="${src}" data-api="${ORIGIN}"${siteAttr} data-skip="admin,login"><\/script>`,
           ].join("\n");
         }
         return [
-          `<!-- 普通 HTML 站：放到 </body> 前一行即可 -->`,
-          `<script src="${src}"${siteAttr}></script>`,
+          "<!-- 普通 HTML 站：放到 </body> 前一行即可 -->",
+          `<script src="${src}"${siteAttr}><\/script>`,
         ].join("\n");
       }
       function buildFrameworkInject() {
