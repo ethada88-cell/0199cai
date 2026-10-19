@@ -18,10 +18,15 @@
       .card { background: var(--card); border-radius: 14px; padding: 18px; box-shadow: 0 1px 10px #00000010; margin-bottom: 14px; }
       .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
       .stack { display:flex; flex-direction:column; gap:10px; }
-      .stack label { display:flex; flex-direction:column; gap:6px; font-size:13px; color:#606266; }
-      .stack input { width:100%; height:40px; }
+      .stack .field { display:flex; flex-direction:column; gap:6px; font-size:13px; color:#606266; }
+      .stack input { width:100%; height:44px; }
       input, select, button, textarea { font: inherit; }
-      input, select { height: 36px; border: 1px solid #dcdfe6; border-radius: 8px; padding: 0 10px; background:#fff; }
+      input, select {
+        height: 36px; border: 1px solid #dcdfe6; border-radius: 8px; padding: 0 10px; background:#fff;
+        -webkit-user-select: text; user-select: text; pointer-events: auto;
+        -webkit-appearance: none; appearance: none;
+      }
+      input:focus, select:focus { outline: 2px solid #93b4ff; border-color: var(--blue); }
       textarea { width:100%; min-height:72px; border:1px solid #dcdfe6; border-radius:8px; padding:10px; resize:vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
       button { height: 36px; border: 0; border-radius: 8px; background: var(--blue); color: #fff; padding: 0 14px; cursor: pointer; }
       button.ghost { background: #eef2ff; color: #1e3a8a; }
@@ -51,10 +56,37 @@
     </style>
   </head>
   <body>
-    <div class="wrap" id="app"></div>
+    <div class="wrap" id="loginWrap">
+      <form class="card login" id="loginForm" autocomplete="off" novalidate>
+        <h1>流量监测后台</h1>
+        <p class="hint">账号密码登录。默认账号 <code>admin</code>，默认密码 <code>admin123@</code>。登录后可在「账号设置」修改。</p>
+        <div class="stack">
+          <div class="field">账号
+            <input id="user" name="username" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请输入账号" value="admin" />
+          </div>
+          <div class="field">密码
+            <input id="pw" name="password" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请输入密码，可直接粘贴" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button type="submit" id="go">登录</button>
+          <button type="button" class="ghost" id="fillDefault">填入默认密码</button>
+          <button type="button" class="ghost" id="pastePw">粘贴密码</button>
+        </div>
+        <div class="row" style="margin-top:4px;margin-bottom:0">
+          <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer">
+            <input type="checkbox" id="hidePw" /> 隐藏密码
+          </label>
+        </div>
+        <p class="err" id="le" style="min-height:1.2em;margin:10px 0 0"></p>
+        <p class="okmsg" id="lm" style="min-height:1.2em;margin:4px 0 0"></p>
+      </form>
+    </div>
+    <div class="wrap" id="app" style="display:none"></div>
     <script>
       const $ = (s, el = document) => el.querySelector(s);
       const app = $("#app");
+      const loginWrap = $("#loginWrap");
       const ORIGIN = location.origin;
       const EMBED = `<script src="${ORIGIN}/probe.js"><\/script>`;
       let token = sessionStorage.getItem("probe-admin-token") || "";
@@ -93,69 +125,81 @@
           return ok;
         }
       }
-      function logout() {
+      function showLogin(msg, ok) {
         token = "";
         username = "";
         sessionStorage.removeItem("probe-admin-token");
         sessionStorage.removeItem("probe-admin-user");
-        loginView();
-      }
-      function loginView() {
-        app.innerHTML = `<div class="card login">
-          <h1>流量监测后台</h1>
-          <p class="hint">账号密码登录。默认账号 <code>admin</code>，默认密码 <code>admin123@</code>。登录后可在「账号设置」修改。</p>
-          <div class="stack">
-            <label>账号
-              <input id="user" type="text" autocomplete="username" spellcheck="false" placeholder="账号" value="admin" />
-            </label>
-            <label>密码
-              <input id="pw" type="text" inputmode="text" autocomplete="current-password" spellcheck="false" placeholder="密码（可粘贴）" />
-            </label>
-          </div>
-          <div class="row" style="margin-top:12px">
-            <button type="button" id="go">登录</button>
-            <button type="button" class="ghost" id="pastePw">粘贴密码</button>
-            <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer">
-              <input type="checkbox" id="hidePw" /> 隐藏密码
-            </label>
-          </div>
-          <p class="err" id="le"></p>
-        </div>`;
+        app.style.display = "none";
+        app.innerHTML = "";
+        loginWrap.style.display = "";
+        $("#le").textContent = msg && !ok ? msg : "";
+        $("#lm").textContent = msg && ok ? msg : "";
         const user = $("#user");
         const pw = $("#pw");
-        pw.addEventListener("paste", (e) => { e.stopPropagation(); }, true);
-        user.addEventListener("paste", (e) => { e.stopPropagation(); }, true);
+        if (user && !user.value) user.value = "admin";
+        if (pw) pw.value = "";
+        try { pw && pw.focus(); } catch (_) {}
+      }
+      function logout() {
+        showLogin("");
+      }
+      function loginView(msg, ok) {
+        showLogin(msg || "", !!ok);
+      }
+      async function doLogin(ev) {
+        if (ev) ev.preventDefault();
+        const user = $("#user");
+        const pw = $("#pw");
+        $("#le").textContent = "";
+        $("#lm").textContent = "";
+        try {
+          const d = await api("/api/admin/login", {
+            method: "POST",
+            body: JSON.stringify({ username: (user.value || "").trim(), password: pw.value || "" }),
+          });
+          token = d.token;
+          username = d.username || (user.value || "").trim();
+          sessionStorage.setItem("probe-admin-token", token);
+          sessionStorage.setItem("probe-admin-user", username);
+          loginWrap.style.display = "none";
+          app.style.display = "";
+          load();
+        } catch (e) {
+          $("#le").textContent = e.message || "账号或密码错误";
+        }
+      }
+      (function bindLogin() {
+        const user = $("#user");
+        const pw = $("#pw");
+        const form = $("#loginForm");
+        form.addEventListener("submit", doLogin);
         $("#hidePw").onchange = (e) => { pw.type = e.target.checked ? "password" : "text"; };
+        $("#fillDefault").onclick = () => {
+          user.value = "admin";
+          pw.value = "admin123@";
+          pw.focus();
+          $("#le").textContent = "";
+          $("#lm").textContent = "已填入默认密码，点登录即可";
+        };
         $("#pastePw").onclick = async () => {
           try {
             if (navigator.clipboard && navigator.clipboard.readText) {
               const text = (await navigator.clipboard.readText()).trim();
-              if (text) { pw.value = text; pw.focus(); return; }
+              if (text) {
+                pw.value = text;
+                pw.dispatchEvent(new Event("input", { bubbles: true }));
+                pw.focus();
+                $("#lm").textContent = "已粘贴";
+                $("#le").textContent = "";
+                return;
+              }
             }
           } catch (_) {}
-          $("#le").textContent = "请在密码框内直接 Ctrl+V / 长按粘贴";
+          $("#le").textContent = "粘贴失败：请点密码框后 Ctrl+V / 长按粘贴，或点「填入默认密码」";
           pw.focus();
         };
-        const go = async () => {
-          try {
-            const d = await api("/api/admin/login", {
-              method: "POST",
-              body: JSON.stringify({ username: user.value.trim(), password: pw.value }),
-            });
-            token = d.token;
-            username = d.username || user.value.trim();
-            sessionStorage.setItem("probe-admin-token", token);
-            sessionStorage.setItem("probe-admin-user", username);
-            load();
-          } catch (e) {
-            $("#le").textContent = e.message || "账号或密码错误";
-          }
-        };
-        $("#go").onclick = go;
-        user.onkeydown = (e) => e.key === "Enter" && pw.focus();
-        pw.onkeydown = (e) => e.key === "Enter" && go();
-        pw.focus();
-      }
+      })();
       async function saveAccount() {
         const currentPassword = $("#curPw").value;
         const newUsername = $("#newUser").value.trim();
@@ -183,16 +227,7 @@
             method: "POST",
             body: JSON.stringify({ currentPassword, newUsername: newUsername || undefined, newPassword: newPassword || undefined }),
           });
-          token = "";
-          username = "";
-          sessionStorage.removeItem("probe-admin-token");
-          sessionStorage.removeItem("probe-admin-user");
-          loginView();
-          $("#le").textContent = "";
-          const tip = document.createElement("p");
-          tip.className = "okmsg";
-          tip.textContent = (d && d.message) || "账号已更新，请用新账号重新登录";
-          $("#le").replaceWith(tip);
+          showLogin((d && d.message) || "账号已更新，请用新账号重新登录", true);
           if (d && d.username) $("#user").value = d.username;
         } catch (e) {
           state.accountErr = e.message || "修改失败";
@@ -200,6 +235,8 @@
         }
       }
       async function load() {
+        loginWrap.style.display = "none";
+        app.style.display = "";
         state.busy = true;
         render();
         const p = new URLSearchParams({ from: state.from, to: state.to, kind: state.kind, q: state.q, offset: String(state.offset), limit: "80" });
@@ -246,6 +283,8 @@
       }
       function render() {
         if (!token) return loginView();
+        loginWrap.style.display = "none";
+        app.style.display = "";
         const s = (state.pack && state.pack.summary) || { realPv: 0, fakePv: 0, trap: 0, trapClose: 0, pv: 0, sources: [], refs: [], kinds: [] };
         const items = (state.pack && state.pack.items) || [];
         const total = (state.pack && state.pack.total) || 0;
@@ -274,18 +313,18 @@
             <h3>账号设置</h3>
             <p class="hint">可修改登录账号和密码。修改成功后需重新登录。密码至少 6 位。</p>
             <div class="stack" style="max-width:420px">
-              <label>当前密码（必填）
-                <input id="curPw" type="text" autocomplete="current-password" spellcheck="false" placeholder="当前密码" />
-              </label>
-              <label>新账号（可选，留空则不改）
-                <input id="newUser" type="text" autocomplete="username" spellcheck="false" placeholder="新账号，当前：${(username || "").replace(/"/g, "&quot;")}" />
-              </label>
-              <label>新密码（可选，留空则不改）
-                <input id="newPw" type="text" autocomplete="new-password" spellcheck="false" placeholder="新密码" />
-              </label>
-              <label>确认新密码
-                <input id="newPw2" type="text" autocomplete="new-password" spellcheck="false" placeholder="再输入一次新密码" />
-              </label>
+              <div class="field">当前密码（必填）
+                <input id="curPw" type="text" autocomplete="off" spellcheck="false" placeholder="当前密码" />
+              </div>
+              <div class="field">新账号（可选，留空则不改）
+                <input id="newUser" type="text" autocomplete="off" spellcheck="false" placeholder="新账号，当前：${(username || "").replace(/"/g, "&quot;")}" />
+              </div>
+              <div class="field">新密码（可选，留空则不改）
+                <input id="newPw" type="text" autocomplete="off" spellcheck="false" placeholder="新密码" />
+              </div>
+              <div class="field">确认新密码
+                <input id="newPw2" type="text" autocomplete="off" spellcheck="false" placeholder="再输入一次新密码" />
+              </div>
             </div>
             <div class="row" style="margin-top:12px;margin-bottom:0">
               <button type="button" id="saveAccount">保存修改</button>
@@ -400,10 +439,6 @@
           const t = e.target.checked ? "password" : "text";
           ["curPw", "newPw", "newPw2"].forEach((id) => { const el = $("#" + id); if (el) el.type = t; });
         };
-        ["curPw", "newPw", "newPw2", "newUser"].forEach((id) => {
-          const el = $("#" + id);
-          if (el) el.addEventListener("paste", (ev) => { ev.stopPropagation(); }, true);
-        });
         $("#saveAccount").onclick = saveAccount;
         $("#copyEmbed").onclick = async () => {
           const ok = await copyText(EMBED);
