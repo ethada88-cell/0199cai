@@ -396,7 +396,7 @@ export function sourceOf(ref, utm, selfHost) {
 
 /** UA / 文案里直接暴露的模拟器、云手机、虚拟机 */
 const EMULATOR_UA_RE =
-  /Emulator|Android SDK built for|sdk_gphone|google_sdk|Genymotion|BlueStacks|MuMu|NoxPlayer|\bNox\b|LDPlayer|雷电|夜神|逍遥|天天模拟器|mumu|memu|remixos|AndyDroid|Windroy|Droid4X|HMSCore.?Emulator|goldfish|ranchu|ttVM_Hdragon|VirtualBox|VBox|VMware|QEMU|Bochs|云手机|CloudPhone|Cloud.?Phone|CloudMobile|云真机|红手指|多多云|网易.?MUMU|腾讯.?手游助手|腾讯.?云.?手机|华为.?云.?手机|小米.?云.?手机|百度.?云.?手机|vmos|光速虚拟|VMOS|PhoneMaster|模拟器|x86_64.+Mobile|iPhone.?Simulator|iOS.?Simulator/i;
+  /Emulator|Android SDK built for|sdk_gphone|google_sdk|Genymotion|BlueStacks|MuMu|NoxPlayer|\bNox\b|LDPlayer|雷电|夜神|逍遥|天天模拟器|mumu|memu|remixos|AndyDroid|Windroy|Droid4X|HMSCore.?Emulator|goldfish|ranchu|ttVM_Hdragon|VirtualBox|VBox|VMware|QEMU|Bochs|云手机|CloudPhone|Cloud.?Phone|CloudMobile|云真机|红手指|RedFinger|HongShouZhi|多多云|DuoDuoYun|duoduoyun|网易.?MUMU|腾讯.?手游助手|腾讯.?云.?手机|华为.?云.?手机|小米.?云.?手机|百度.?云.?手机|vmos|光速虚拟|VMOS|PhoneMaster|模拟器|x86_64.+Mobile|iPhone.?Simulator|iOS.?Simulator/i;
 
 /** WebGL 渲染器：模拟器 / 虚拟显卡常见值 */
 const EMULATOR_WEBGL_RE =
