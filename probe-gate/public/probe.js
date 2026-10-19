@@ -8,7 +8,7 @@
  *
  * 流程：
  * 1. 页面加载后 POST /api/probe（UA、来路、webdriver 等）
- * 2. 服务器判定爬虫 / 无头 / 机房 IP，写入后台统计
+ * 2. 服务器判定爬虫 / 无头 / 自动化伪装 / 机房 IP，写入后台统计
  * 3. 仅 fake/trap=true 时弹窗；真人与 silent 模式都不弹
  */
 (function () {
@@ -64,13 +64,70 @@
   }
 
   function signals() {
+    var empty = { webdriver: false, headless: false };
     try {
-      return {
+      var ua = navigator.userAgent || "";
+      var s = {
         webdriver: Boolean(navigator.webdriver),
-        headless: /HeadlessChrome|Headless/i.test(navigator.userAgent || ""),
+        headless: /HeadlessChrome|Headless/i.test(ua),
+        plugins: (navigator.plugins && navigator.plugins.length) || 0,
+        languages: (navigator.languages && navigator.languages.length) || 0,
+        lang: navigator.language || "",
+        hw: navigator.hardwareConcurrency || 0,
+        mem: navigator.deviceMemory || 0,
+        touch: navigator.maxTouchPoints || 0,
+        chrome: typeof window.chrome !== "undefined",
+        chromeRuntime: !!(window.chrome && window.chrome.runtime),
+        uaChrome: /Chrome\//.test(ua) && !/Edg\//.test(ua),
+        uaMobile: /Mobile|Android|iPhone|iPad/i.test(ua),
+        outer: (typeof outerWidth !== "undefined" ? outerWidth : -1) + "x" + (typeof outerHeight !== "undefined" ? outerHeight : -1),
+        screen: (screen && screen.width ? screen.width : 0) + "x" + (screen && screen.height ? screen.height : 0),
+        webgl: "",
+        cdc: false,
+        selenium: false,
+        phantom: false,
+        nightmare: false,
+        puppeteer: false,
+        playwright: false,
+        domWebdriver: false,
       };
+      try {
+        s.domWebdriver = document.documentElement.getAttribute("webdriver") === "true";
+      } catch (e1) {}
+      try {
+        s.phantom = !!(window.callPhantom || window._phantom);
+        s.nightmare = !!window.__nightmare;
+        s.puppeteer = !!(window.__puppeteer_evaluation_script__);
+        s.playwright = !!(window.__playwright || window._playwright);
+        s.selenium = !!(document.$cdc_asdjflasutopfhvcZLmcfl_ || window._Selenium_IDE_Recorder);
+      } catch (e2) {}
+      try {
+        for (var k in document) {
+          if (/^\$cdc_|\$chrome_asyncScriptInfo|__selenium_|__webdriver_/.test(k)) {
+            s.cdc = true;
+            break;
+          }
+        }
+      } catch (e3) {}
+      try {
+        for (var w in window) {
+          if (/^cdc_|__selenium|__webdriver|__driver_evaluate|__fxdriver/i.test(w)) {
+            s.cdc = true;
+            break;
+          }
+        }
+      } catch (e4) {}
+      try {
+        var c = document.createElement("canvas");
+        var gl = c.getContext("webgl") || c.getContext("experimental-webgl");
+        if (gl) {
+          var dbg = gl.getExtension("WEBGL_debug_renderer_info");
+          if (dbg) s.webgl = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "").slice(0, 80);
+        }
+      } catch (e5) {}
+      return s;
     } catch (e) {
-      return { webdriver: false, headless: false };
+      return empty;
     }
   }
 

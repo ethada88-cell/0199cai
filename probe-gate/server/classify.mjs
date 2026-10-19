@@ -1,10 +1,11 @@
 /**
  * 访问判定（隐藏弹窗的核心）
  *
- * 只有下面三类会弹窗（trap=true），真人浏览器不弹：
- * 1. crawler  爬虫 / 扫描器 / 脚本 UA
- * 2. headless 无头浏览器（webdriver、HeadlessChrome）
- * 3. datacenter 云厂商 / 机房 IP
+ * 下面几类会弹窗（trap=true），真人浏览器不弹：
+ * 1. crawler     爬虫 / 扫描器 / 脚本 UA
+ * 2. headless    无头浏览器（webdriver、HeadlessChrome）
+ * 3. automation  自动化伪装（隐匿 webdriver / 指纹不一致 / 驱动残留）
+ * 4. datacenter  云厂商 / 机房 IP
  *
  * 后台「刷量检测」和前台弹窗用的是同一套结果。
  */
@@ -287,12 +288,54 @@ function isCrawlerUa(ua) {
   return CRAWLER_RE.test(s);
 }
 
-/** 前端 probe.js 上报的信号：webdriver / Headless 字样 */
+/** 明确的无头 / WebDriver 信号 */
 function isHeadless(signals) {
   if (!signals || typeof signals !== "object") return false;
   if (signals.webdriver) return true;
   if (signals.headless) return true;
   return false;
+}
+
+/**
+ * 自动化伪装：UA 像真人，但指纹 / 驱动残留 / 请求头暴露自动化。
+ * 命中即假量（与无头同级弹窗）。
+ */
+function isAutomationDisguise(signals, ua, req) {
+  const s = signals && typeof signals === "object" ? signals : {};
+  // 驱动 / 注入残留（即使伪装了 webdriver）
+  if (s.cdc || s.selenium || s.phantom || s.nightmare || s.puppeteer || s.playwright) return true;
+  if (s.domWebdriver) return true;
+
+  let score = 0;
+  const uaChrome = Boolean(s.uaChrome) || (/Chrome\//i.test(ua) && !/Edg\//i.test(ua));
+  const uaMobile = Boolean(s.uaMobile) || /Mobile|Android|iPhone|iPad/i.test(ua);
+
+  // Chrome UA 却没有 window.chrome
+  if (uaChrome && s.chrome === false) score += 3;
+  // 桌面 Chrome 插件数为 0（常见于无头 / 伪浏览器）
+  if (uaChrome && !uaMobile && Number(s.plugins) === 0) score += 2;
+  // languages 为空
+  if (Number(s.languages) === 0) score += 2;
+  // 窗口外尺寸 0
+  if (String(s.outer || "") === "0x0") score += 2;
+  // 软件渲染 WebGL
+  if (/SwiftShader|llvmpipe|Software Rasterizer|mesa offscreen|Virtio/i.test(String(s.webgl || ""))) score += 3;
+  // 手机 UA 却无触控点
+  if (uaMobile && Number(s.touch) === 0) score += 2;
+  // 异常硬件并发
+  if (s.hw === 0 || s.hw === 1 && uaChrome && Number(s.plugins) === 0) score += 1;
+  // Chrome 却没有 chrome.runtime（自动化常见）
+  if (uaChrome && s.chrome === true && s.chromeRuntime === false && Number(s.plugins) === 0) score += 1;
+
+  // 请求头：自称浏览器却缺 Accept-Language
+  const al = req && req.headers ? req.headers["accept-language"] : "";
+  if (looksLikePersonBrowser(ua) && !al) score += 2;
+  // 现代 Chrome 通常带 sec-fetch-*；纯脚本伪造 UA 时常缺失
+  if (/Chrome\/\d{2,}/i.test(ua) && req && req.headers) {
+    if (!req.headers["sec-fetch-mode"] && !req.headers["sec-fetch-site"]) score += 1;
+  }
+
+  return score >= 3;
 }
 
 /** 从完整 URL 取出主机名，去掉 www. */
@@ -354,12 +397,14 @@ export const KIND_NAME = {
   crawler: "爬虫",
   datacenter: "机房IP",
   headless: "无头浏览器",
+  automation: "自动化伪装",
 };
 
-/** 判定优先级：爬虫 UA → 无头 → 机房 IP → 真人 */
-export function classifyKind(ip, ua, signals) {
+/** 判定优先级：爬虫 UA → 无头 → 自动化伪装 → 机房 IP → 真人 */
+export function classifyKind(ip, ua, signals, req) {
   if (isCrawlerUa(ua)) return "crawler";
   if (isHeadless(signals)) return "headless";
+  if (isAutomationDisguise(signals, ua, req)) return "automation";
   if (isDatacenterIp(ip)) return "datacenter";
   return "human";
 }
@@ -388,7 +433,7 @@ export function classifyRequest(req, body = {}) {
   const ref = pickRef(req, body, host);
   const utm = String(body.utm || "").slice(0, 60);
   const source = sourceOf(ref, utm, host);
-  const kind = classifyKind(ip, ua, body.signals);
+  const kind = classifyKind(ip, ua, body.signals, req);
   const fake = kind !== "human";
   return {
     ip,
