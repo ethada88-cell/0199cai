@@ -3,13 +3,13 @@
  *
  * 用法：<script src="https://你的域名/probe.js"></script>
  *
- * 默认「无感」：只上报判定结果到后台，页面不弹任何窗。
- * 若要恢复弹窗：<script src=".../probe.js" data-mode="popup"></script>
+ * 默认：判定为假量（爬虫 / 无头 / 机房 IP）才弹「访问核验」；真实用户不弹。
+ * 无感（只统计不弹窗）：<script src=".../probe.js" data-mode="silent"></script>
  *
  * 流程：
  * 1. 页面加载后 POST /api/probe（UA、来路、webdriver 等）
  * 2. 服务器判定爬虫 / 无头 / 机房 IP，写入后台统计
- * 3. 无感模式不渲染遮罩；popup 模式且 trap=true 才显示「访问核验」
+ * 3. 仅 fake/trap=true 时弹窗；真人与 silent 模式都不弹
  */
 (function () {
   var KEY = "probe-trap-ok";
@@ -22,7 +22,7 @@
   }
   if (script && script.getAttribute("data-api")) BASE = String(script.getAttribute("data-api")).replace(/\/$/, "");
   var SITE = (script && script.getAttribute("data-site")) || location.host || "web";
-  var MODE = ((script && script.getAttribute("data-mode")) || "silent").toLowerCase(); // silent | popup
+  var MODE = ((script && script.getAttribute("data-mode")) || "popup").toLowerCase(); // popup | silent
   var skip = ((script && script.getAttribute("data-skip")) || "admin").split(",").map(function (s) {
     return s.trim();
   });
