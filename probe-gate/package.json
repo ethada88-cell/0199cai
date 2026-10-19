@@ -1,0 +1,11 @@
+{
+  "name": "probe-gate",
+  "private": true,
+  "version": "1.0.0",
+  "description": "隐藏弹窗：爬虫 / 无头浏览器 / 机房 IP 才弹出访问核验，真实用户不可见",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.mjs",
+    "dev": "node server/index.mjs"
+  }
+}

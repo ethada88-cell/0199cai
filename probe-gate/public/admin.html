@@ -1,0 +1,209 @@
+<!doctype html>
+<!-- 刷量检测后台：登录后看来源 / 来路 / 弹窗次数。密码是环境变量 ADMIN_PASS -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>刷量检测</title>
+    <style>
+      :root { --blue:#3e73fe; --bg:#f4f6fb; --card:#fff; --text:#191a23; --muted:#909399; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+      h1 { font-size: 22px; margin: 0 0 6px; }
+      .hint { color: var(--muted); font-size: 13px; margin: 0 0 18px; line-height: 1.5; }
+      .card { background: var(--card); border-radius: 12px; padding: 18px; box-shadow: 0 1px 8px #00000012; margin-bottom: 16px; }
+      .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+      input, select, button { font: inherit; }
+      input, select { height: 36px; border: 1px solid #dcdfe6; border-radius: 8px; padding: 0 10px; }
+      button { height: 36px; border: 0; border-radius: 8px; background: var(--blue); color: #fff; padding: 0 14px; cursor: pointer; }
+      button.ghost { background: #eef2ff; color: #1e3a8a; }
+      button:disabled { opacity: .6; }
+      .stats { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
+      .stat { background: #f5f7fa; border-radius: 10px; padding: 12px; }
+      .stat span { display:block; color: var(--muted); font-size: 12px; }
+      .stat strong { display:block; font-size: 22px; margin: 6px 0 2px; }
+      .stat em { font-style: normal; color: #606266; font-size: 12px; }
+      .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      ul { list-style: none; margin: 0; padding: 0; }
+      li { display:flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+      li button { background: none; color: inherit; height: auto; padding: 0; text-align: left; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid #eee; }
+      th { color: var(--muted); font-weight: 600; }
+      .sub { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+      .err { color: #c45656; }
+      .login { max-width: 360px; margin: 12vh auto; }
+      @media (max-width: 800px) {
+        .stats, .split { grid-template-columns: 1fr 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap" id="app"></div>
+    <script>
+      // 纯前端后台，接口都在同域 /api/admin/*
+      const $ = (s, el = document) => el.querySelector(s);
+      const app = $("#app");
+      let token = sessionStorage.getItem("probe-admin-token") || "";
+      let state = { from: day(0), to: day(0), kind: "fake", q: "", offset: 0, pack: null, err: "", busy: false };
+
+      function day(off) {
+        const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Hong_Kong", year: "numeric", month: "2-digit", day: "2-digit" });
+        const p = Object.fromEntries(fmt.formatToParts(new Date()).map((x) => [x.type, x.value]));
+        const utc = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day) + off);
+        return new Date(utc).toISOString().slice(0, 10);
+      }
+      function typeName(t) {
+        return ({ page: "访问", click: "点击", leave: "离开", probe: "核验", "trap-close": "关弹窗" }[t] || t);
+      }
+      async function api(path, init) {
+        const r = await fetch(path, {
+          ...init,
+          headers: { "Content-Type": "application/json", "X-Admin-Token": token, ...(init && init.headers) },
+        });
+        const j = await r.json();
+        if (j.code !== 200) throw new Error(j.message || "请求失败");
+        return j.data;
+      }
+      function loginView() {
+        app.innerHTML = `<div class="card login"><h1>刷量检测</h1><p class="hint">隐藏弹窗后台。真实用户看不到弹窗，爬虫 / 无头浏览器 / 机房 IP 才会弹出。</p>
+          <div class="row"><input id="pw" type="password" placeholder="后台密码" style="flex:1" />
+          <button id="go">登录</button></div><p class="err" id="le"></p></div>`;
+        const go = async () => {
+          try {
+            const d = await api("/api/admin/login", { method: "POST", body: JSON.stringify({ password: $("#pw").value }) });
+            token = d.token;
+            sessionStorage.setItem("probe-admin-token", token);
+            load();
+          } catch (e) {
+            $("#le").textContent = e.message;
+          }
+        };
+        $("#go").onclick = go;
+        $("#pw").onkeydown = (e) => e.key === "Enter" && go();
+      }
+      async function load() {
+        state.busy = true;
+        render();
+        const p = new URLSearchParams({ from: state.from, to: state.to, kind: state.kind, q: state.q, offset: String(state.offset), limit: "80" });
+        try {
+          state.pack = await api("/api/admin/track?" + p);
+          if (state.pack.from) state.from = state.pack.from;
+          if (state.pack.to) state.to = state.pack.to;
+          state.err = "";
+        } catch (e) {
+          if (/登录/.test(e.message)) {
+            token = "";
+            sessionStorage.removeItem("probe-admin-token");
+            loginView();
+            return;
+          }
+          state.err = e.message;
+        }
+        state.busy = false;
+        render();
+      }
+      function apply(patch) {
+        Object.assign(state, patch);
+        if (patch.offset == null) state.offset = 0;
+        load();
+      }
+      function render() {
+        const s = (state.pack && state.pack.summary) || { realPv: 0, fakePv: 0, trap: 0, trapClose: 0, pv: 0, sources: [], refs: [], kinds: [] };
+        const items = (state.pack && state.pack.items) || [];
+        const total = (state.pack && state.pack.total) || 0;
+        const rate = s.pv ? Math.round((s.fakePv / s.pv) * 100) : 0;
+        const tops = (arr) =>
+          (arr || []).length
+            ? arr.map((x) => `<li><button type="button" data-q="${x.name.replace(/"/g, "")}">${x.name}</button><em>${x.count}</em></li>`).join("")
+            : `<p class="hint">暂无</p>`;
+        app.innerHTML = `<h1>刷量检测</h1>
+          <p class="hint">与前台弹窗同一套判定：爬虫、无头浏览器、机房 IP 才弹窗，真实用户看不到。</p>
+          <div class="card">
+            <div class="row">
+              <input type="date" id="from" value="${state.from}" />
+              <span>—</span>
+              <input type="date" id="to" value="${state.to}" />
+              <button class="ghost" data-p="today">今日</button>
+              <button class="ghost" data-p="yest">昨日</button>
+              <button class="ghost" data-p="week">近 7 天</button>
+              <select id="kind">
+                <option value="fake"${state.kind === "fake" ? " selected" : ""}>假量</option>
+                <option value="crawler"${state.kind === "crawler" ? " selected" : ""}>爬虫</option>
+                <option value="datacenter"${state.kind === "datacenter" ? " selected" : ""}>机房IP</option>
+                <option value="headless"${state.kind === "headless" ? " selected" : ""}>无头浏览器</option>
+                <option value="human"${state.kind === "human" ? " selected" : ""}>真实用户</option>
+                <option value=""${state.kind === "" ? " selected" : ""}>全部</option>
+              </select>
+              <button id="query">${state.busy ? "查询中" : "查询"}</button>
+            </div>
+            <div class="stats">
+              <div class="stat"><span>真实 PV</span><strong>${s.realPv || 0}</strong><em>判定为真人</em></div>
+              <div class="stat"><span>假量 PV</span><strong>${s.fakePv || 0}</strong><em>爬虫 / 机房</em></div>
+              <div class="stat"><span>假量占比</span><strong>${rate}%</strong><em>假量 / 总 PV</em></div>
+              <div class="stat"><span>弹窗曝光</span><strong>${s.trap || 0}</strong><em>只有假量能看见</em></div>
+              <div class="stat"><span>点关闭</span><strong>${s.trapClose || 0}</strong><em>关弹窗后浏览</em></div>
+            </div>
+          </div>
+          <div class="card split">
+            <div><h3>来源</h3><ul>${tops(s.sources)}</ul></div>
+            <div><h3>来路流量</h3><ul>${tops(s.refs)}</ul></div>
+          </div>
+          <div class="card">
+            <div class="row">
+              <input id="q" value="${state.q.replace(/"/g, "&quot;")}" placeholder="搜来源、来路、IP、UA" style="flex:1" />
+              <button id="sq">查询</button>
+            </div>
+            <p class="hint">明细 ${total} 条 ${state.err ? " · " + state.err : ""}</p>
+            <table>
+              <thead><tr><th>时间</th><th>判定</th><th>来源</th><th>来路流量</th><th>页面</th><th>访客</th></tr></thead>
+              <tbody>
+                ${
+                  items.length
+                    ? items
+                        .map(
+                          (ev) => `<tr>
+                    <td>${ev.at || ""}<p class="sub">${typeName(ev.type)}</p></td>
+                    <td>${ev.kindName || (ev.fake ? "假量" : "真实用户")}<p class="sub">${ev.siteName || ""}</p></td>
+                    <td>${ev.source || "直接访问"}</td>
+                    <td>${ev.refHost || "直接访问"}${ev.ref ? `<p class="sub">${ev.ref}</p>` : ""}</td>
+                    <td>${ev.pageName || ""}<p class="sub">${ev.page || ""}</p><p class="sub">${ev.label || ""}</p></td>
+                    <td>${ev.uid || "游客"}<p class="sub">${ev.ip || ""}</p><p class="sub">${ev.ua || ""}</p></td>
+                  </tr>`
+                        )
+                        .join("")
+                    : `<tr><td colspan="6" class="hint">${state.busy ? "加载中…" : "这一段没有匹配记录。假量进来后会出现弹窗与来源。"}</td></tr>`
+                }
+              </tbody>
+            </table>
+            <div class="row" style="margin-top:12px">
+              <button class="ghost" id="prev" ${state.offset <= 0 ? "disabled" : ""}>上一页</button>
+              <button class="ghost" id="next" ${state.offset + 80 >= total ? "disabled" : ""}>下一页</button>
+            </div>
+          </div>`;
+        $("#from").onchange = (e) => (state.from = e.target.value);
+        $("#to").onchange = (e) => (state.to = e.target.value);
+        $("#kind").onchange = (e) => apply({ kind: e.target.value });
+        $("#query").onclick = () => apply({ from: $("#from").value, to: $("#to").value, offset: 0 });
+        app.querySelectorAll("[data-p]").forEach((b) => {
+          b.onclick = () => {
+            const k = b.getAttribute("data-p");
+            if (k === "today") apply({ from: day(0), to: day(0) });
+            if (k === "yest") apply({ from: day(-1), to: day(-1) });
+            if (k === "week") apply({ from: day(-6), to: day(0) });
+          };
+        });
+        app.querySelectorAll("[data-q]").forEach((b) => {
+          b.onclick = () => apply({ q: b.getAttribute("data-q") });
+        });
+        $("#sq").onclick = () => apply({ q: $("#q").value });
+        $("#q").onkeydown = (e) => e.key === "Enter" && apply({ q: $("#q").value });
+        $("#prev").onclick = () => apply({ offset: Math.max(0, state.offset - 80) });
+        $("#next").onclick = () => apply({ offset: state.offset + 80 });
+      }
+      if (!token) loginView();
+      else load();
+    </script>
+  </body>
+</html>
