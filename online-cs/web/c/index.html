@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <!-- ocs-entry-20261019d -->
+  <!-- ocs-entry-20261019e -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <script>
@@ -105,25 +105,18 @@
       display:flex; flex-direction:column; min-height:0;
     }
     .head {
-      background:#c62828;
-      color:#fff; padding: calc(8px + env(safe-area-inset-top)) 48px 10px 40px;
+      background:#bf242a;
+      color:#fff; padding: calc(4px + env(safe-area-inset-top)) 52px 4px 12px;
       flex-shrink:0; display:flex; align-items:center; justify-content:center;
-      position:relative; min-height:52px;
+      position:relative; min-height:56px;
     }
     .brand {
-      display:flex; flex-direction:row; align-items:baseline; justify-content:center;
-      gap:6px; line-height:1; text-align:center; max-width:100%;
-      min-width:0;
+      display:flex; align-items:center; justify-content:center;
+      min-width:0; max-width:100%;
     }
-    .brand-mark {
-      font-weight:900; font-size:24px; letter-spacing:.4px;
-      color:#ffd54f !important; text-shadow:0 1px 0 rgba(80,20,0,.28);
-      font-family:Arial,"Helvetica Neue","PingFang SC",sans-serif;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:58vw;
-    }
-    .brand-sub {
-      font-size:13px; font-weight:700; color:#fff !important;
-      letter-spacing:.5px; opacity:.98; white-space:nowrap; flex-shrink:0;
+    .brand-logo {
+      height:42px; width:auto; max-width:68vw; display:block;
+      object-fit:contain;
     }
     .head-actions {
       position:absolute; right:8px; top:50%; transform:translateY(-30%);
@@ -398,8 +391,7 @@
     <div class="head">
       <button type="button" class="mode-toggle" id="btnSiteMode" hidden>看官网</button>
       <div class="brand">
-        <div class="brand-mark" id="coName">9065.COM</div>
-        <div class="brand-sub" id="coSub">彩票网</div>
+        <img class="brand-logo" id="coLogo" src="/c/logo-0199.png" alt="0199彩票" />
       </div>
       <div class="head-actions">
         <button type="button" id="btnLang" title="语言" aria-label="语言">
@@ -1175,20 +1167,9 @@
           return;
         }
         const title = (meta.seat_title || meta.widget_title || "").trim() || meta.name || "在线咨询";
-        // 顶栏：金色主标题（短）+ 白色副标题「彩票网」，对齐截图 9065.COM + 彩票网
-        let brand = (meta.widget_title || "").trim();
-        if (!brand || brand.length > 14) {
-          const hostLike = String(meta.name || "").match(/[A-Za-z0-9][A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
-          brand = hostLike ? hostLike[0].toUpperCase() : "9065.COM";
-        }
         defaultAgentName = title;
-        document.getElementById("coName").textContent = brand;
-        const subEl = document.getElementById("coSub");
-        const sub = (meta.widget_subtitle || "").trim() || "彩票网";
-        subEl.hidden = false;
-        subEl.textContent = sub.length > 8 ? sub.slice(0, 8) : sub;
-        document.title = title + " · 在线咨询";
-        const wel = ("欢迎联系我们，官方网址" + (meta.name || brand)).replace(/\s+/g, "");
+        document.title = "0199彩票 · 在线咨询";
+        const wel = ("欢迎联系我们，官方网址" + (meta.name || "0199彩票")).replace(/\s+/g, "");
         syncAgentCard(title, wel.length > 26 ? wel.slice(0, 26) + "…" : wel);
         const badge = document.getElementById("hoursBadge");
         badge.hidden = true;
