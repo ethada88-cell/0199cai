@@ -340,15 +340,9 @@
     .fab-chat.show { display:flex; }
     .mode-toggle {
       position:absolute; left:8px; top:50%; transform:translateY(-30%);
-      border:0; background:transparent; color:#fff;
-      border-radius:0; padding:4px 6px; font-size:0; font-weight:700;
-      cursor:pointer; z-index:5; width:28px; height:28px;
-      display:grid; place-items:center;
-    }
-    .mode-toggle::before {
-      content:""; width:10px; height:10px;
-      border-left:2px solid #fff; border-bottom:2px solid #fff;
-      transform:rotate(45deg); margin-left:4px;
+      border:0; background:rgba(255,255,255,.22); color:#fff;
+      border-radius:999px; padding:5px 10px; font-size:12px; font-weight:700;
+      cursor:pointer; z-index:5; line-height:1.2; white-space:nowrap;
     }
     @media (min-width: 640px) {
       body.embed-app { padding:0 !important; background:#0f0f10 !important; }
