@@ -240,38 +240,58 @@
     var startedAt = 0;
     var challenge = null;
     var done = false;
+    var trail = []; // 真人轨迹采样 {t,x}
+    var lastSampleAt = 0;
 
     function maxLeft() {
       return Math.max(0, track.clientWidth - knob.offsetWidth - 6);
     }
-    function setPos(px) {
+    function pushSample(force) {
+      if (!startedAt) return;
+      var now = Date.now();
+      if (!force && now - lastSampleAt < 12) return; // ~80Hz 上限，保留抖动
+      lastSampleAt = now;
+      trail.push({ t: now - startedAt, x: Math.round(curPct * 100) / 100 });
+      if (trail.length > 180) trail = trail.slice(trail.length - 180);
+    }
+    function setPos(px, sample) {
       var m = maxLeft();
       var x = Math.max(0, Math.min(m, px));
       knob.style.left = 3 + x + "px";
       fill.style.width = 3 + x + knob.offsetWidth / 2 + "px";
       curPct = m > 0 ? (x / m) * 100 : 0;
+      if (sample !== false) pushSample(false);
     }
     function placeNotch(target) {
       var m = maxLeft();
       notch.style.left = 3 + (target / 100) * m + knob.offsetWidth / 2 + "px";
     }
+    function resetTrail() {
+      trail = [];
+      lastSampleAt = 0;
+      startedAt = 0;
+    }
 
     function onDown(clientX) {
       if (done || !challenge) return;
       dragging = true;
-      startedAt = startedAt || Date.now();
+      startedAt = Date.now();
       startX = clientX;
       startLeft = parseFloat(knob.style.left || "3") - 3;
+      trail = [];
+      lastSampleAt = 0;
+      pushSample(true);
       tip.textContent = "拖到圆圈处松手";
       err.textContent = "";
     }
     function onMove(clientX) {
       if (!dragging) return;
-      setPos(startLeft + (clientX - startX));
+      setPos(startLeft + (clientX - startX), true);
     }
     function onUp() {
       if (!dragging) return;
       dragging = false;
+      pushSample(true);
       finish();
     }
 
@@ -284,6 +304,7 @@
         sig: challenge.sig,
         offset: Math.round(curPct * 10) / 10,
         durationMs: durationMs,
+        track: trail.slice(),
         vid: vid(),
         signals: signals(),
       })
@@ -315,17 +336,17 @@
               dismiss(wrap);
             }, 350);
           } else {
-            err.textContent = (j && j.message) || "请对齐滑块后重试";
+            err.textContent = (j && j.message) || "请用手拖动对齐滑块";
             tip.textContent = "按住滑块拖动";
-            setPos(0);
-            startedAt = 0;
+            setPos(0, false);
+            resetTrail();
             refreshChallenge();
           }
         })
         .catch(function () {
           err.textContent = "网络异常，请重试";
-          setPos(0);
-          startedAt = 0;
+          setPos(0, false);
+          resetTrail();
           refreshChallenge();
         });
     }
@@ -339,7 +360,8 @@
             return;
           }
           placeNotch(Number(challenge.target) || 50);
-          setPos(0);
+          setPos(0, false);
+          resetTrail();
           tip.textContent = challenge.tip || "按住滑块拖动";
         })
         .catch(function () {
