@@ -9,7 +9,10 @@
  * 5. datacenter  云厂商 / 机房 IP
  *
  * 后台「刷量检测」和前台弹窗用的是同一套结果。
+ * 6. learned     自学习记忆命中（历史假量指纹 / IP / 人工标注）
  */
+import { applyLearning } from "./learn.mjs";
+
 export function clientIp(req) {
   // 优先取反代传来的真实 IP，避免只看到 127.0.0.1
   const xf = String(req.headers["x-forwarded-for"] || "")
@@ -452,6 +455,7 @@ export const KIND_NAME = {
   headless: "无头浏览器",
   automation: "自动化伪装",
   emulator: "模拟器/云手机",
+  learned: "智能学习",
 };
 
 /** 判定优先级：爬虫 → 无头 → 模拟器/云手机 → 自动化伪装 → 机房 IP → 真人 */
@@ -478,6 +482,7 @@ function pickRef(req, body, host) {
 /**
  * 一次请求的完整判定结果。
  * trap === true 时，前端必须弹出「访问核验」。
+ * 静态规则之后还会套用自学习记忆（见 learn.mjs）。
  */
 export function classifyRequest(req, body = {}) {
   const ip = clientIp(req);
@@ -490,7 +495,7 @@ export function classifyRequest(req, body = {}) {
   const source = sourceOf(ref, utm, host);
   const kind = classifyKind(ip, ua, body.signals, req);
   const fake = kind !== "human";
-  return {
+  const base = {
     ip,
     ua,
     host,
@@ -501,4 +506,16 @@ export function classifyRequest(req, body = {}) {
     trap: fake,
     fake,
   };
+  return applyLearningSafe(base, body.signals || {});
+}
+
+function applyLearningSafe(base, signals) {
+  try {
+    const out = applyLearning(base, signals);
+    out.kindName = KIND_NAME[out.kind] || out.kindName || out.kind;
+    out.trap = Boolean(out.fake);
+    return out;
+  } catch {
+    return base;
+  }
 }

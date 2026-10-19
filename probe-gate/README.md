@@ -101,3 +101,13 @@ probe-gate/
 - `POST /api/track` 关闭弹窗 / 点击等事件  
 - `POST /api/admin/login`  
 - `GET /api/admin/track`
+
+## 自学习（越用越准）
+
+系统会把假量的 IP / UA / 设备指纹记入记忆；同一指纹或 IP 多次假量后自动拉黑。
+
+后台明细每行可点 **假量** / **真人** 纠错：
+- 标假量：立即拉黑，下次同类直接判定「智能学习」
+- 标真人：豁免，避免误伤（不覆盖爬虫等硬规则）
+
+记忆保存在 Docker 卷 `/data/learn/memory.json`。

@@ -18,6 +18,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ingestTrack, probeVisit, adminTrack } from "./track.mjs";
+import { summary as learnSummary, feedback as learnFeedback, removeLearned } from "./learn.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
@@ -200,6 +201,27 @@ const server = http.createServer(async (req, res) => {
       if (!validToken(adminToken(req, url))) return json(res, { code: 401, message: "请先登录后台" }, 401);
       if (p === "/api/admin/track") {
         return json(res, { code: 200, data: adminTrack(Object.fromEntries(url.searchParams)) });
+      }
+      if (p === "/api/admin/learn" && req.method === "GET") {
+        return json(res, { code: 200, data: learnSummary() });
+      }
+      if (p === "/api/admin/feedback" && req.method === "POST") {
+        let body = {};
+        try {
+          body = JSON.parse((await readBody(req, 8000)).toString("utf8") || "{}");
+        } catch {
+          body = {};
+        }
+        return json(res, { code: 200, data: learnFeedback(body) });
+      }
+      if (p === "/api/admin/learn/remove" && req.method === "POST") {
+        let body = {};
+        try {
+          body = JSON.parse((await readBody(req, 4000)).toString("utf8") || "{}");
+        } catch {
+          body = {};
+        }
+        return json(res, { code: 200, data: removeLearned(body) });
       }
       return json(res, { code: 404, message: "not found" }, 404);
     }

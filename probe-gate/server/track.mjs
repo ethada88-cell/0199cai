@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { classifyRequest, KIND_NAME, sourceOf, hostOf } from "./classify.mjs";
+import { observe } from "./learn.mjs";
 
 const DATA_DIR =
   process.env.DATA_DIR ||
@@ -139,7 +140,15 @@ function flush() {
           if (ev.vid) sum.uv[ev.vid] = (sum.uv[ev.vid] || 0) + 1;
           bump(sum.pages, ev.pageName || ev.page);
           bump(sum.sites, ev.site || "web");
-          if (ev.fake || ev.kind === "crawler" || ev.kind === "datacenter" || ev.kind === "headless" || ev.kind === "automation" || ev.kind === "emulator") {
+          if (
+            ev.fake ||
+            ev.kind === "crawler" ||
+            ev.kind === "datacenter" ||
+            ev.kind === "headless" ||
+            ev.kind === "automation" ||
+            ev.kind === "emulator" ||
+            ev.kind === "learned"
+          ) {
             sum.fakePv = (sum.fakePv || 0) + 1;
           } else sum.realPv = (sum.realPv || 0) + 1;
         } else if (ev.type === "click") {
@@ -230,6 +239,8 @@ function normalize(raw, ctx) {
     sy: Math.round(num(raw.sy, 0, 40000)),
     ip: ctx.ip,
     ua: ctx.ua,
+    fp: clip(cls.fp || raw.fp, 24),
+    learnReason: clip(cls.learnReason || raw.learnReason, 80),
   };
   ev.at = fmtTime(ev.ts);
   return ev;
@@ -263,6 +274,18 @@ export function ingestTrack(req, body) {
  */
 export function probeVisit(req, body = {}) {
   const cls = classifyRequest(req, body);
+  try {
+    observe(cls, body.signals || {});
+  } catch {
+    /* learn must not break probe */
+  }
+  const label = cls.fake
+    ? cls.kind === "learned"
+      ? "智能学习·" + (cls.learnReason || "记忆命中")
+      : String(process.env.PROBE_MODE || "silent").toLowerCase() === "popup"
+        ? "假量弹窗"
+        : "假量检测"
+    : "真实访问";
   const ev = normalize(
     {
       type: "probe",
@@ -273,7 +296,7 @@ export function probeVisit(req, body = {}) {
       site: body.site,
       ref: cls.ref,
       source: cls.source,
-      label: cls.trap ? (String(process.env.PROBE_MODE || "silent").toLowerCase() === "popup" ? "假量弹窗" : "假量检测") : "真实访问",
+      label,
     },
     { ip: cls.ip, ua: cls.ua, now: Date.now(), cls, host: cls.host }
   );
@@ -291,6 +314,8 @@ export function probeVisit(req, body = {}) {
     source: cls.source,
     ref: cls.ref,
     refHost: hostOf(cls.ref) || "直接访问",
+    fp: cls.fp || "",
+    learnReason: cls.learnReason || "",
   };
 }
 
@@ -344,7 +369,17 @@ function readDayLines(day, max = 4000) {
 
 function matchEv(ev, q, type, page, site, kind) {
   if (type && ev.type !== type) return false;
-  if (kind === "fake" && !ev.fake && ev.kind !== "crawler" && ev.kind !== "datacenter" && ev.kind !== "headless" && ev.kind !== "automation" && ev.kind !== "emulator") return false;
+  if (
+    kind === "fake" &&
+    !ev.fake &&
+    ev.kind !== "crawler" &&
+    ev.kind !== "datacenter" &&
+    ev.kind !== "headless" &&
+    ev.kind !== "automation" &&
+    ev.kind !== "emulator" &&
+    ev.kind !== "learned"
+  )
+    return false;
   if (kind && kind !== "fake" && ev.kind !== kind) return false;
   if (site && ev.site !== site) return false;
   if (page) {
