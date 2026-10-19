@@ -161,7 +161,7 @@
         const C = L.counts || {};
         const St = L.stats || {};
         app.innerHTML = `<h1>刷量检测</h1>
-          <p class="hint">静态规则 + 自学习记忆：系统会记住假量 IP / UA / 设备指纹；你在明细里点「假量/真人」会立刻纠正并影响后续判定。</p>
+          <p class="hint">疑似假量会出滑动验证（不是点确定）：滑对即记真量并豁免。规则已偏保守以减少真人误伤；仍可在明细里点「假量/真人」纠错。</p>
           <div class="card">
             <div class="row">
               <input type="date" id="from" value="${state.from}" />
@@ -187,8 +187,8 @@
               <div class="stat"><span>真实 PV</span><strong>${s.realPv || 0}</strong><em>判定为真人</em></div>
               <div class="stat"><span>假量 PV</span><strong>${s.fakePv || 0}</strong><em>含智能学习</em></div>
               <div class="stat"><span>假量占比</span><strong>${rate}%</strong><em>假量 / 总 PV</em></div>
-              <div class="stat"><span>弹窗曝光</span><strong>${s.trap || 0}</strong><em>假量弹窗曝光</em></div>
-              <div class="stat"><span>点关闭</span><strong>${s.trapClose || 0}</strong><em>关弹窗后浏览</em></div>
+              <div class="stat"><span>验证曝光</span><strong>${s.trap || 0}</strong><em>滑动验证出现</em></div>
+              <div class="stat"><span>验证通过</span><strong>${s.trapClose || 0}</strong><em>滑过=真量</em></div>
             </div>
           </div>
           <div class="card">

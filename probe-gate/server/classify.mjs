@@ -331,15 +331,12 @@ function isAutomationDisguise(signals, ua, req) {
   // Chrome 却没有 chrome.runtime（自动化常见）
   if (uaChrome && s.chrome === true && s.chromeRuntime === false && Number(s.plugins) === 0) score += 1;
 
-  // 请求头：自称浏览器却缺 Accept-Language
+  // 请求头缺失只作弱信号（隐私浏览器也可能缺）
   const al = req && req.headers ? req.headers["accept-language"] : "";
-  if (looksLikePersonBrowser(ua) && !al) score += 2;
-  // 现代 Chrome 通常带 sec-fetch-*；纯脚本伪造 UA 时常缺失
-  if (/Chrome\/\d{2,}/i.test(ua) && req && req.headers) {
-    if (!req.headers["sec-fetch-mode"] && !req.headers["sec-fetch-site"]) score += 1;
-  }
+  if (looksLikePersonBrowser(ua) && !al) score += 1;
 
-  return score >= 3;
+  // 阈值偏高：减少插件数/缺头等边缘信号误伤真人
+  return score >= 4;
 }
 
 /** 从完整 URL 取出主机名，去掉 www. */
@@ -445,7 +442,8 @@ function isEmulatorOrCloudPhone(signals, ua, req) {
   // 连接类型 ethernet / 无网络信息却是手机（弱信号）
   if (uaMobile && String(s.netType || "") === "ethernet") score += 2;
 
-  return score >= 3;
+  // 阈值偏高：减少家宽 / 少见机型误伤
+  return score >= 4;
 }
 
 export const KIND_NAME = {

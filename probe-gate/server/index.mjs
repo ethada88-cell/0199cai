@@ -19,6 +19,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ingestTrack, probeVisit, adminTrack } from "./track.mjs";
 import { summary as learnSummary, feedback as learnFeedback, removeLearned } from "./learn.mjs";
+import { issueChallenge, verifyChallenge } from "./challenge.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
@@ -156,7 +157,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // 前台嵌入脚本会调这个：返回 trap=true 才弹窗
+    // 前台嵌入脚本会调这个：返回 trap=true 才出滑动验证
     if (p === "/api/probe" && (req.method === "GET" || req.method === "POST")) {
       let body = {};
       if (req.method === "POST") {
@@ -174,6 +175,26 @@ const server = http.createServer(async (req, res) => {
         };
       }
       return json(res, { code: 200, data: probeVisit(req, body) });
+    }
+
+    // 滑动验证：下发挑战 / 校验通过后记为真量
+    if (p === "/api/challenge" && req.method === "POST") {
+      let body = {};
+      try {
+        body = JSON.parse((await readBody(req, 12000)).toString("utf8") || "{}");
+      } catch {
+        body = {};
+      }
+      return json(res, { code: 200, data: issueChallenge(req, body) });
+    }
+    if (p === "/api/challenge/verify" && req.method === "POST") {
+      let body = {};
+      try {
+        body = JSON.parse((await readBody(req, 12000)).toString("utf8") || "{}");
+      } catch {
+        body = {};
+      }
+      return json(res, { code: 200, data: verifyChallenge(req, body) });
     }
 
     if (p === "/api/track" && req.method === "POST") {

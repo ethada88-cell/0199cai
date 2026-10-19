@@ -20,10 +20,10 @@ const DATA_DIR =
 const DIR = path.join(DATA_DIR, "learn");
 const FILE = path.join(DIR, "memory.json");
 
-/** 指纹假量次数达到此值 → 自动拉黑 */
-const FP_FAKE_PROMOTE = Number(process.env.LEARN_FP_PROMOTE || 3);
+/** 指纹假量次数达到此值 → 自动拉黑（偏保守，减少误伤） */
+const FP_FAKE_PROMOTE = Number(process.env.LEARN_FP_PROMOTE || 5);
 /** IP 在窗口内假量次数 → 自动拉黑 */
-const IP_FAKE_PROMOTE = Number(process.env.LEARN_IP_PROMOTE || 5);
+const IP_FAKE_PROMOTE = Number(process.env.LEARN_IP_PROMOTE || 8);
 /** 记忆保留天数 */
 const KEEP_DAYS = Number(process.env.LEARN_KEEP_DAYS || 45);
 
@@ -166,6 +166,20 @@ export function applyLearning(cls, signals = {}) {
   const uaE = m.uas[uh];
   const fpE = m.fps[fp];
 
+  // 滑动验证通过：最高优先级，直接真量（减少真人误伤）
+  if ((ipE && ipE.slidePass) || (fpE && fpE.slidePass)) {
+    return {
+      ...cls,
+      kind: "human",
+      kindName: "真实用户",
+      fake: false,
+      trap: false,
+      learned: false,
+      learnReason: "滑动验证通过",
+      fp,
+    };
+  }
+
   // 人工豁免：只挡「学习升级」，不挡爬虫/无头等硬假量
   const hardFake = cls.kind && cls.kind !== "human" && cls.kind !== "learned";
   if (!hardFake && ((ipE && ipE.allow) || (uaE && uaE.allow) || (fpE && fpE.allow))) {
@@ -185,16 +199,11 @@ export function applyLearning(cls, signals = {}) {
     return { ...cls, learned: false, fp };
   }
 
+  // 仅「已拉黑」才学习升级；去掉软升级，降低真人误伤
   const reasons = [];
-  if (ipE && ipE.block) reasons.push("学习IP");
-  if (uaE && uaE.block) reasons.push("学习UA");
-  if (fpE && fpE.block) reasons.push("学习指纹");
-
-  // 未拉黑但近期假量很密：软升级
-  if (!reasons.length) {
-    if (fpE && (fpE.fake || 0) >= FP_FAKE_PROMOTE - 1 && (fpE.fake || 0) > (fpE.human || 0)) reasons.push("指纹高频假量");
-    if (ipE && (ipE.fake || 0) >= IP_FAKE_PROMOTE - 1 && (ipE.fake || 0) > (ipE.human || 0) * 2) reasons.push("IP高频假量");
-  }
+  if (ipE && ipE.block && !ipE.allow && !ipE.slidePass) reasons.push("学习IP");
+  if (uaE && uaE.block && !uaE.allow) reasons.push("学习UA");
+  if (fpE && fpE.block && !fpE.allow && !fpE.slidePass) reasons.push("学习指纹");
 
   if (!reasons.length) return { ...cls, learned: false, fp };
 
@@ -303,6 +312,33 @@ export function feedback({ ip = "", ua = "", fp = "", label, note = "" } = {}) {
   }
   scheduleSave();
   return summary();
+}
+
+/** 滑动验证通过后调用：强豁免 IP + 指纹 */
+export function markSlidePass(ip, fp) {
+  const m = load();
+  if (ip) {
+    const e = bumpEntry(m.ips, ip, {});
+    if (e) {
+      e.slidePass = true;
+      e.allow = true;
+      e.block = false;
+      e.human = (e.human || 0) + 2;
+      e.note = "slide-pass";
+    }
+  }
+  if (fp) {
+    const e = bumpEntry(m.fps, fp, {});
+    if (e) {
+      e.slidePass = true;
+      e.allow = true;
+      e.block = false;
+      e.human = (e.human || 0) + 2;
+      e.note = "slide-pass";
+    }
+  }
+  m.stats.slidePass = (m.stats.slidePass || 0) + 1;
+  scheduleSave();
 }
 
 export function removeLearned({ type, key } = {}) {
