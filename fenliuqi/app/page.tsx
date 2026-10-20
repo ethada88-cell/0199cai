@@ -82,7 +82,7 @@ export default function HomePage() {
           <Card>
             <CardHeader>
               <CardTitle>后台</CardTitle>
-              <CardDescription>默认账号 admin，密码 admin123@。部署前请用环境变量改掉。</CardDescription>
+              <CardDescription>登录后台管理站点和域名线路。</CardDescription>
             </CardHeader>
             <CardContent>
               <Button className="h-10 px-4" nativeButton={false} render={<Link href="/admin" />}>

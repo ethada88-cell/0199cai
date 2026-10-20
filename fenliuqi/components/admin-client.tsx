@@ -234,7 +234,7 @@ export function AdminClient() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle>登录后台</CardTitle>
-              <CardDescription>账号 admin，密码 admin123@。</CardDescription>
+              <CardDescription>请输入后台账号和密码。</CardDescription>
             </CardHeader>
             <CardContent>
               <form className="grid gap-3" onSubmit={login}>
