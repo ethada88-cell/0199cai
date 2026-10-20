@@ -1,0 +1,5 @@
+Domain: fenliuqi.ojy0871.com
+Console: https://fenliuqi.ojy0871.com/login/
+Visitor: https://fenliuqi.ojy0871.com/c/{slug}/?a={agent}
+
+Isolated native instance. Does not share DB/Redis-db/uploads with cs.ojy0871.com.
