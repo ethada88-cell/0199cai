@@ -26,7 +26,6 @@ export function JumpClient() {
   const [result, setResult] = useState<JumpResult | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(ready)
-  const [hold, setHold] = useState(false)
 
   useEffect(() => {
     if (!ready) return
@@ -66,12 +65,12 @@ export function JumpClient() {
   const fastest = result?.lines.find((line) => line.id === result.fastestId) ?? null
 
   useEffect(() => {
-    if (!result || optional || hold || !fastest) return
+    if (!result || optional || !fastest) return
     const timer = window.setTimeout(() => {
       window.location.replace(fastest.url)
     }, 500)
     return () => window.clearTimeout(timer)
-  }, [result, optional, hold, fastest])
+  }, [result, optional, fastest])
 
   function openDraft(manual: boolean) {
     const query = new URLSearchParams({
@@ -114,7 +113,7 @@ export function JumpClient() {
           <div className="flex w-full flex-col items-center gap-6 text-center">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">
-                {loading || (fastest && !optional && !hold)
+                {loading || (fastest && !optional)
                   ? "正在为您选择最优线路"
                   : error
                     ? "暂时进不去"
@@ -122,7 +121,7 @@ export function JumpClient() {
                       ? "选择线路"
                       : "线路不可用"}
               </h1>
-              {loading || (fastest && !optional && !hold) ? null : (
+              {loading || (fastest && !optional) ? null : (
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
                   {error
                     ? error
@@ -133,7 +132,7 @@ export function JumpClient() {
               )}
             </div>
 
-            {result && (optional || hold || !fastest) ? (
+            {result && optional ? (
               <div className="grid w-full gap-3 text-left">
                 {result.lines.map((line, index) => {
                   const clickable = line.status === "ok" || line.status === "skipped"
@@ -167,31 +166,6 @@ export function JumpClient() {
                 })}
               </div>
             ) : null}
-
-            <div className="flex flex-wrap justify-center gap-2">
-              {fastest && !optional ? (
-                <Button
-                  className="h-10 px-4"
-                  onClick={() => {
-                    window.location.replace(fastest.url)
-                  }}
-                >
-                  进入{fastest.label}
-                </Button>
-              ) : null}
-              {fastest && !optional && !hold ? (
-                <Button className="h-10 px-4" variant="outline" onClick={() => setHold(true)}>
-                  先别跳
-                </Button>
-              ) : null}
-              <Button
-                className="h-10 px-4"
-                variant="outline"
-                onClick={() => window.location.reload()}
-              >
-                重新检测
-              </Button>
-            </div>
           </div>
         )}
       </main>
