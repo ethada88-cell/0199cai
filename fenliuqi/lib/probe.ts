@@ -1,8 +1,8 @@
 import type { Domain, ProbeLine } from "./types"
 
-const PROBE_TIMEOUT_MS = 2000
-const EARLY_SETTLE_MS = 350
-const TOTAL_BUDGET_MS = 2200
+const PROBE_TIMEOUT_MS = 1500
+const QUICK_CONCURRENCY = 8
+const QUICK_BUDGET_MS = 1800
 
 async function probeOne(domain: Domain, timeoutMs = PROBE_TIMEOUT_MS): Promise<ProbeLine> {
   const started = Date.now()
@@ -84,9 +84,8 @@ export async function probeDomains(domains: Domain[], check: boolean) {
 }
 
 /**
- * Race probes and return as soon as a good line is found.
- * Waits a short settle window after the first OK to pick a faster one,
- * instead of waiting for every domain (including timeouts).
+ * 自动跳转用：并发探测，一出现可用线路立刻返回（不再等全部超时）。
+ * 同批里若已有更快的 OK，会带上；未测完的标成未完成。
  */
 export async function probeDomainsQuick(domains: Domain[]) {
   const enabled = domains.filter((domain) => domain.enabled)
@@ -94,8 +93,8 @@ export async function probeDomainsQuick(domains: Domain[]) {
 
   return new Promise<ProbeLine[]>((resolve) => {
     const results: Array<ProbeLine | undefined> = new Array(enabled.length)
+    let cursor = 0
     let completed = 0
-    let firstOkAt: number | null = null
     let done = false
     const startedAt = Date.now()
 
@@ -105,32 +104,36 @@ export async function probeDomainsQuick(domains: Domain[]) {
       resolve(enabled.map((domain, index) => results[index] ?? pendingLine(domain)))
     }
 
-    const maybeFinish = () => {
+    const onResult = (index: number, line: ProbeLine) => {
       if (done) return
-      const hasOk = results.some((line) => line?.status === "ok")
-      const allDone = completed >= enabled.length
-      const budgetOut = Date.now() - startedAt >= TOTAL_BUDGET_MS
-      const settled =
-        firstOkAt !== null && Date.now() - firstOkAt >= EARLY_SETTLE_MS
-
-      if (allDone || (hasOk && settled) || budgetOut) finish()
+      results[index] = line
+      completed += 1
+      // 第一个可用线路立刻走，打开速度优先
+      if (line.status === "ok") {
+        finish()
+        return
+      }
+      if (completed >= enabled.length) finish()
+      else if (Date.now() - startedAt >= QUICK_BUDGET_MS) finish()
+      else pump()
     }
 
-    for (let index = 0; index < enabled.length; index++) {
-      const domain = enabled[index]
-      void probeOne(domain).then((line) => {
-        if (done) return
-        results[index] = line
-        completed += 1
-        if (line.status === "ok" && firstOkAt === null) {
-          firstOkAt = Date.now()
-          setTimeout(maybeFinish, EARLY_SETTLE_MS)
-        }
-        maybeFinish()
-      })
+    const pump = () => {
+      while (!done && cursor < enabled.length) {
+        const active = results.filter((line) => line === undefined).length
+        // count in-flight roughly: started - completed
+        const inFlight = cursor - completed
+        if (inFlight >= QUICK_CONCURRENCY) break
+        const index = cursor
+        cursor += 1
+        void probeOne(enabled[index]).then((line) => onResult(index, line))
+      }
     }
 
-    setTimeout(maybeFinish, TOTAL_BUDGET_MS)
+    pump()
+    setTimeout(() => {
+      if (!done) finish()
+    }, QUICK_BUDGET_MS)
   })
 }
 
