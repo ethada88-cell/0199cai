@@ -114,27 +114,23 @@ export function JumpClient() {
           <div className="flex w-full flex-col items-center gap-6 text-center">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">
-                {loading
-                  ? "正在检查线路"
+                {loading || (fastest && !optional && !hold)
+                  ? "正在为您选择最优线路"
                   : error
                     ? "暂时进不去"
-                    : fastest && !optional && !hold
-                      ? "正在进入"
-                      : optional
-                        ? "选择线路"
-                        : "线路不可用"}
+                    : optional
+                      ? "选择线路"
+                      : "线路不可用"}
               </h1>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                {loading
-                  ? "正在逐个确认域名能否打开。"
-                  : error
+              {loading || (fastest && !optional && !hold) ? null : (
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                  {error
                     ? error
-                    : fastest && !optional && !hold
-                      ? "请稍候。"
-                      : optional
-                        ? "选择一条线路进入。延迟越低，打开通常越快。"
-                        : "没有可用线路，请稍后重试。"}
-              </p>
+                    : optional
+                      ? "选择一条线路进入。延迟越低，打开通常越快。"
+                      : "没有可用线路，请稍后重试。"}
+                </p>
+              )}
             </div>
 
             {result && (optional || hold || !fastest) ? (

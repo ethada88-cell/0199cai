@@ -3,8 +3,8 @@ import { Suspense } from "react"
 import { JumpClient } from "@/components/jump-client"
 
 export const metadata: Metadata = {
-  title: "请稍候",
-  description: "正在确认可用线路。",
+  title: "正在为您选择最优线路",
+  description: "正在为您选择最优线路",
   robots: { index: false, follow: false },
 }
 
