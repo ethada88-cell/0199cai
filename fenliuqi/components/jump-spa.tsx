@@ -77,6 +77,20 @@ function promiseAny<T>(items: Promise<T>[]) {
   })
 }
 
+async function serverRace(urls: string[]) {
+  const response = await fetch("/api/heartbeat-race", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ urls }),
+  })
+  const body = (await response.json().catch(() => null)) as { url?: string; error?: string } | null
+  if (!response.ok || !body?.url) {
+    throw new Error(body?.error || "server race failed")
+  }
+  return body.url
+}
+
 export function JumpSpa() {
   const params = useSearchParams()
   const siteCode = params.get("siteCode")?.trim() ?? ""
@@ -85,16 +99,26 @@ export function JumpSpa() {
   const isCheck = params.get("isCheck") !== "0"
   const ready = Boolean(siteCode && token)
 
-  const otherQuery = useMemo(() => {
-    const pairs: { key: string; value: string }[] = []
+  const otherQueryKey = useMemo(() => {
+    const pairs: string[] = []
     params.forEach((value, key) => {
-      if (!PRESERVE.has(key)) pairs.push({ key, value })
+      if (!PRESERVE.has(key)) pairs.push(`${key}=${value}`)
     })
-    return pairs
+    pairs.sort()
+    return pairs.join("&")
   }, [params])
+
+  const otherQuery = useMemo(() => {
+    if (!otherQueryKey) return [] as { key: string; value: string }[]
+    return otherQueryKey.split("&").map((part) => {
+      const i = part.indexOf("=")
+      return { key: part.slice(0, i), value: part.slice(i + 1) }
+    })
+  }, [otherQueryKey])
 
   const [phase, setPhase] = useState<Phase>(ready ? "loading-config" : "need")
   const [lines, setLines] = useState<Line[]>([])
+  const [errorDetail, setErrorDetail] = useState("")
   const [draftCode, setDraftCode] = useState(siteCode)
   const [draftToken, setDraftToken] = useState(token)
 
@@ -106,71 +130,103 @@ export function JumpSpa() {
 
     void (async () => {
       setPhase("loading-config")
+      setErrorDetail("")
+      let domains: string[] = []
       try {
         const uuid = crypto.randomUUID()
-        const response = await fetch(`/dc/${siteCode}-${token}.txt?uuid=${uuid}`, {
+        const response = await fetch(`/dc/${encodeURIComponent(siteCode)}-${encodeURIComponent(token)}.txt?uuid=${uuid}`, {
           cache: "no-store",
         })
-        if (!response.ok) throw new Error("config missing")
+        if (!response.ok) {
+          throw Object.assign(new Error("config missing"), { kind: "config" as const })
+        }
         const hex = (await response.text()).trim()
         if (cancelled) return
-        const plain = await decryptDcHex(hex, key, iv)
+        let plain: string
+        try {
+          plain = await decryptDcHex(hex, key, iv)
+        } catch {
+          throw Object.assign(new Error("decrypt failed"), { kind: "config" as const })
+        }
         const json = JSON.parse(plain) as DcJson
-        const domains = String(json.domains || "")
+        domains = String(json.domains || "")
           .split(",")
           .map((item) => item.trim())
           .filter(Boolean)
-        if (!domains.length) throw new Error("no domains")
-        const nextLines: Line[] = domains.map((domain, index) => ({
-          id: `${siteCode}-${token}-${index}-${domain}`,
-          domain,
-          domainHost: hostOf(domain),
-          jumpLink: withExtraQuery(domain, otherQuery),
-          index,
-          state: isCheck ? 1 : 0,
-          ping: -1,
-        }))
-        setLines(nextLines)
-        if (optional) {
-          setPhase("pick")
-          if (!isCheck) return
-          nextLines.forEach((line) => {
-            const started = Date.now()
-            void heartbeat(line)
-              .then((result) => {
-                if (cancelled) return
-                setLines((prev) =>
-                  prev.map((item) =>
-                    item.id === line.id
-                      ? {
-                          ...item,
-                          state: result.code === "10008" ? 4 : 2,
-                          ping: Date.now() - started,
-                        }
-                      : item
-                  )
-                )
-              })
-              .catch(() => {
-                if (cancelled) return
-                setLines((prev) =>
-                  prev.map((item) => (item.id === line.id ? { ...item, state: 3, ping: -1 } : item))
-                )
-              })
-          })
-          return
+        if (!domains.length) {
+          throw Object.assign(new Error("empty domains"), { kind: "config" as const })
         }
+      } catch (err) {
+        if (!cancelled) {
+          setErrorDetail(err instanceof Error ? err.message : "")
+          setPhase("fail-config")
+        }
+        return
+      }
 
-        setPhase("probing")
+      const nextLines: Line[] = domains.map((domain, index) => ({
+        id: `${siteCode}-${token}-${index}-${domain}`,
+        domain,
+        domainHost: hostOf(domain),
+        jumpLink: withExtraQuery(domain, otherQuery),
+        index,
+        state: isCheck ? 1 : 0,
+        ping: -1,
+      }))
+      if (cancelled) return
+      setLines(nextLines)
+
+      if (optional) {
+        setPhase("pick")
+        if (!isCheck) return
+        nextLines.forEach((line) => {
+          const started = Date.now()
+          void heartbeat(line)
+            .then((result) => {
+              if (cancelled) return
+              setLines((prev) =>
+                prev.map((item) =>
+                  item.id === line.id
+                    ? {
+                        ...item,
+                        state: result.code === "10008" ? 4 : 2,
+                        ping: Date.now() - started,
+                      }
+                    : item
+                )
+              )
+            })
+            .catch(() => {
+              if (cancelled) return
+              setLines((prev) =>
+                prev.map((item) => (item.id === line.id ? { ...item, state: 3, ping: -1 } : item))
+              )
+            })
+        })
+        return
+      }
+
+      setPhase("probing")
+      try {
         const winner = await promiseAny(nextLines.map((line) => heartbeat(line)))
         if (cancelled) return
         if (winner.code === "10008") {
-          setPhase("fail-nodes")
+          // 浏览器侧受限时走服务端竞速
+          const url = await serverRace(domains)
+          if (!cancelled) window.location.replace(withExtraQuery(url, otherQuery))
           return
         }
         window.location.replace(winner.line.jumpLink)
       } catch {
-        if (!cancelled) setPhase("fail-config")
+        try {
+          const url = await serverRace(domains)
+          if (!cancelled) window.location.replace(withExtraQuery(url, otherQuery))
+        } catch (err) {
+          if (!cancelled) {
+            setErrorDetail(err instanceof Error ? err.message : "")
+            setPhase("fail-nodes")
+          }
+        }
       }
     })()
 
@@ -203,7 +259,7 @@ export function JumpSpa() {
               siteCode: draftCode.trim(),
               token: draftToken.trim(),
             })
-            window.location.href = `/jump/?${query.toString()}`
+            window.location.href = `/jump?${query.toString()}`
           }}
         >
           继续
@@ -222,7 +278,8 @@ export function JumpSpa() {
       ) : null}
       {phase === "fail-config" ? (
         <>
-          <p className="mt-10 text-lg text-zinc-600">未找到域名配置 请重试或联系管理员</p>
+          <p className="text-lg text-zinc-600">未找到域名配置 请重试或联系管理员</p>
+          {errorDetail ? <p className="mt-2 text-xs text-zinc-400">{errorDetail}</p> : null}
           <button
             type="button"
             className="mt-8 h-12 min-w-[180px] rounded bg-emerald-500 px-6 text-lg text-white"
@@ -234,7 +291,8 @@ export function JumpSpa() {
       ) : null}
       {phase === "fail-nodes" ? (
         <>
-          <p className="mt-10 text-lg text-zinc-600">未找到可用的域名节点 请重试或联系管理员</p>
+          <p className="text-lg text-zinc-600">未找到可用的域名节点 请重试或联系管理员</p>
+          {errorDetail ? <p className="mt-2 text-xs text-zinc-400">{errorDetail}</p> : null}
           <button
             type="button"
             className="mt-8 h-12 min-w-[180px] rounded bg-emerald-500 px-6 text-lg text-white"

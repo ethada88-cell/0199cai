@@ -207,7 +207,7 @@ export function AdminClient() {
     const query = new URLSearchParams({ siteCode: site.siteCode, token: site.token })
     if (manual) query.set("optional", "1")
     // 与参考站相同：/jump/?siteCode=&token=，域名在 /dc/{siteCode}-{token}.txt 密文里
-    const link = `${window.location.origin}/jump/?${query.toString()}`
+    const link = `${window.location.origin}/jump?${query.toString()}`
     await navigator.clipboard.writeText(link)
     setNotice(manual ? "已复制选线链接" : "已复制跳转链接")
   }
