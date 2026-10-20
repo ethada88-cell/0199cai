@@ -94,8 +94,6 @@ export function JumpSpa() {
   }, [params])
 
   const [phase, setPhase] = useState<Phase>(ready ? "loading-config" : "need")
-  const [alias, setAlias] = useState("")
-  const [configHash, setConfigHash] = useState("")
   const [lines, setLines] = useState<Line[]>([])
   const [draftCode, setDraftCode] = useState(siteCode)
   const [draftToken, setDraftToken] = useState(token)
@@ -116,7 +114,6 @@ export function JumpSpa() {
         if (!response.ok) throw new Error("config missing")
         const hex = (await response.text()).trim()
         if (cancelled) return
-        setConfigHash(hex.slice(-10))
         const plain = await decryptDcHex(hex, key, iv)
         const json = JSON.parse(plain) as DcJson
         const domains = String(json.domains || "")
@@ -133,7 +130,6 @@ export function JumpSpa() {
           state: isCheck ? 1 : 0,
           ping: -1,
         }))
-        setAlias(json.alias || json.siteCode || siteCode)
         setLines(nextLines)
         if (optional) {
           setPhase("pick")
@@ -217,15 +213,12 @@ export function JumpSpa() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-3xl flex-1 flex-col items-center px-4 pb-16 pt-10 text-center">
-      {alias ? <p className="text-base font-semibold text-zinc-600">{alias}</p> : null}
-      {configHash ? <p className="mt-1 text-xs text-zinc-400">配置更新哈希 {configHash}</p> : null}
-
+    <main className="mx-auto flex min-h-full w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 pb-16 pt-10 text-center">
       {phase === "loading-config" ? (
-        <p className="mt-10 text-lg text-zinc-600">获取域名配置中 请等待...</p>
+        <p className="text-lg text-zinc-600">获取域名配置中 请等待...</p>
       ) : null}
       {phase === "probing" ? (
-        <p className="mt-10 text-lg text-zinc-600">获取域名节点中 请等待...</p>
+        <p className="text-lg text-zinc-600">获取域名节点中 请等待...</p>
       ) : null}
       {phase === "fail-config" ? (
         <>
