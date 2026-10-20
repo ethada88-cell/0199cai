@@ -1,4 +1,5 @@
 import type { Domain, ProbeLine } from "./types"
+import { expandLiveUrl, isWildcardUrl } from "./wildcard"
 
 const PROBE_TIMEOUT_MS = 2500
 const QUICK_TIMEOUT_MS = 2200
@@ -33,8 +34,10 @@ function orderForQuick(domains: Domain[]) {
 
 async function probeOne(domain: Domain, timeoutMs = PROBE_TIMEOUT_MS): Promise<ProbeLine> {
   const started = Date.now()
+  // 通配根域每次探测都换新子域；返回的 url 也是本次生成的可跳转地址
+  const liveUrl = isWildcardUrl(domain.url) ? expandLiveUrl(domain.url) : domain.url
   try {
-    const response = await fetch(domain.url, {
+    const response = await fetch(liveUrl, {
       method: "GET",
       redirect: "manual",
       cache: "no-store",
@@ -54,8 +57,8 @@ async function probeOne(domain: Domain, timeoutMs = PROBE_TIMEOUT_MS): Promise<P
       response.status === 405
     return {
       id: domain.id,
-      label: domain.label || hostOf(domain.url),
-      url: domain.url,
+      label: domain.label || hostOf(liveUrl),
+      url: liveUrl,
       status: ok ? "ok" : "down",
       ms,
       detail: ok ? `${ms} ms` : `HTTP ${response.status}`,
@@ -64,7 +67,7 @@ async function probeOne(domain: Domain, timeoutMs = PROBE_TIMEOUT_MS): Promise<P
     return {
       id: domain.id,
       label: domain.label || hostOf(domain.url),
-      url: domain.url,
+      url: liveUrl,
       status: "down",
       ms: null,
       detail: "无法连接",
@@ -173,8 +176,11 @@ export function fastestLine(lines: ProbeLine[]) {
   }, null)
 }
 
-/** 探测全失败时仍尽量跳转，避免误报「线路不可用」。 */
+/** 探测全失败时仍尽量跳转，避免误报「线路不可用」。通配根域会先展开成随机子域。 */
 export function fallbackLine(domains: Domain[]): Domain | null {
   const enabled = orderForQuick(domains.filter((domain) => domain.enabled && !isDemoHost(domain.url)))
-  return enabled[0] ?? null
+  const first = enabled[0]
+  if (!first) return null
+  if (!isWildcardUrl(first.url)) return first
+  return { ...first, url: expandLiveUrl(first.url) }
 }

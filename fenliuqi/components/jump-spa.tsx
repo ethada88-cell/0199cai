@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { decryptDcHex } from "@/lib/client-aes"
 import { DEFAULT_JUMP_AES_IV, DEFAULT_JUMP_AES_KEY } from "@/lib/jump-keys"
+import { expandLiveUrl, isWildcardUrl } from "@/lib/wildcard"
 
 type DcJson = {
   siteCode: string
@@ -164,15 +165,19 @@ export function JumpSpa() {
         return
       }
 
-      const nextLines: Line[] = domains.map((domain, index) => ({
-        id: `${siteCode}-${token}-${index}-${domain}`,
-        domain,
-        domainHost: hostOf(domain),
-        jumpLink: withExtraQuery(domain, otherQuery),
-        index,
-        state: isCheck ? 1 : 0,
-        ping: -1,
-      }))
+      // 通配根域（*.0199x.app）每次打开都生成新的随机子域，不用主域/www
+      const nextLines: Line[] = domains.map((domain, index) => {
+        const live = isWildcardUrl(domain) ? expandLiveUrl(domain) : domain
+        return {
+          id: `${siteCode}-${token}-${index}-${live}`,
+          domain: live,
+          domainHost: hostOf(live),
+          jumpLink: withExtraQuery(live, otherQuery),
+          index,
+          state: isCheck ? 1 : 0,
+          ping: -1,
+        }
+      })
       if (cancelled) return
       setLines(nextLines)
 
@@ -219,6 +224,7 @@ export function JumpSpa() {
         window.location.replace(winner.line.jumpLink)
       } catch {
         try {
+          // 传原始配置（含 *.根域），由服务端再展开新子域竞速
           const url = await serverRace(domains)
           if (!cancelled) window.location.replace(withExtraQuery(url, otherQuery))
         } catch (err) {

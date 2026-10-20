@@ -1,3 +1,5 @@
+import { normalizeWildcardRoot } from "./wildcard"
+
 export function isBlockedHost(hostname: string) {
   const host = hostname.toLowerCase().replace(/\.+$/, "").replace(/^\[|\]$/g, "")
   if (
@@ -27,6 +29,7 @@ export function isBlockedHost(hostname: string) {
 export function normalizeHttpUrl(input: string) {
   let raw = input.trim()
   if (!raw || raw.startsWith("#")) return null
+
   if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
     raw = `https://${raw}`
   }
@@ -41,7 +44,27 @@ export function normalizeHttpUrl(input: string) {
   if (url.protocol !== "http:" && url.protocol !== "https:") return null
   if (url.username || url.password) return null
   if (!url.hostname || isBlockedHost(url.hostname)) return null
+  // 禁止 www 主域线路
+  if (url.hostname.toLowerCase().startsWith("www.")) return null
   return url.toString()
+}
+
+/** 支持固定域名，或 *.0199x.app / wildcard:0199x.app（跳转时生成随机子域）。 */
+export function normalizeDomainEntry(input: string) {
+  const raw = input.trim()
+  if (!raw) return null
+  const looksWild =
+    raw.startsWith("*.") ||
+    raw.toLowerCase().startsWith("wildcard:") ||
+    /^https?:\/\/\*\./i.test(raw)
+  if (looksWild) {
+    const wild = normalizeWildcardRoot(raw)
+    if (!wild) return null
+    const root = wild.replace(/^https:\/\/\*\./i, "").replace(/\/$/, "")
+    if (isBlockedHost(root)) return null
+    return wild
+  }
+  return normalizeHttpUrl(raw)
 }
 
 export function parseDomainLines(text: string) {
@@ -55,7 +78,7 @@ export function parseDomainLines(text: string) {
     const pieces = trimmed.split(/\s+\|\s+|\s{2,}|\t+/)
     const urlPart = pieces[0]?.trim() ?? ""
     const label = pieces.slice(1).join(" ").trim()
-    const url = normalizeHttpUrl(urlPart)
+    const url = normalizeDomainEntry(urlPart)
     if (!url) {
       skipped.push(trimmed)
       continue

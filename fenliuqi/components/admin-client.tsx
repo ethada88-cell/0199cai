@@ -363,13 +363,15 @@ export function AdminClient() {
               <Card>
                 <CardHeader>
                   <CardTitle>添加域名</CardTitle>
-                  <CardDescription>每行一个网址。名称写在竖线后面，例如 https://example.com | 主线路</CardDescription>
+                  <CardDescription>
+                    每行一个网址。通配根域用 <code>*.0199x.app</code>（每次跳转自动生成随机子域，不用主域/www）。名称写在竖线后。
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4">
                   <form className="grid gap-2 sm:grid-cols-[1fr_180px_auto]" onSubmit={addOne}>
                     <Input
                       aria-label="域名"
-                      placeholder="https://example.com"
+                      placeholder="*.0199x.app 或 https://a.example.com"
                       value={url}
                       onChange={(event) => setUrl(event.target.value)}
                     />
@@ -385,7 +387,7 @@ export function AdminClient() {
                   </form>
                   <Textarea
                     aria-label="批量域名"
-                    placeholder={"https://a.example | 线路一\nhttps://b.example | 线路二"}
+                    placeholder={"*.0199x.app | 通配X\n*.0199y.app | 通配Y\nhttps://a.example | 固定线路"}
                     value={bulk}
                     onChange={(event) => setBulk(event.target.value)}
                     className="min-h-28"

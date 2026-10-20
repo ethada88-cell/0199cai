@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "crypto"
 import { publishAllDc, publishSiteDc, removeSiteDc } from "./dc-publish"
 import { updateStore } from "./store"
 import type { Domain, Site } from "./types"
-import { isSiteCode, isToken, normalizeHttpUrl } from "./urls"
+import { isSiteCode, isToken, normalizeDomainEntry } from "./urls"
 
 function makeToken() {
   return randomBytes(8).toString("hex")
@@ -126,7 +126,7 @@ export async function addDomains(siteId: string, entries: { url: string; label: 
   await updateStore((store) => {
     const site = findSite(store.sites, siteId)
     for (const entry of entries) {
-      const url = normalizeHttpUrl(entry.url)
+      const url = normalizeDomainEntry(entry.url)
       if (!url) {
         skipped.push(entry.url)
         continue

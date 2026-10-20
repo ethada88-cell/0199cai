@@ -46,8 +46,9 @@ SESSION_SECRET=一段足够长的随机字符串
    https://b.example | 备用线路
    ```
 
-4. 后台点「复制跳转链接」发给访问者。地址形如 `/jump/?siteCode=demo&token=demo-token`（与常见 Vue 跳转页相同）。
+4. 后台点「复制跳转链接」发给访问者。地址形如 `/jump?siteCode=demo&token=demo-token`（与常见 Vue 跳转页相同）。
 5. 浏览器会拉取 `/dc/{siteCode}-{token}.txt`（AES-128-CBC 密文），解密后对各域名 `POST /melody/api/v1/base/heartbeat`，`Promise.any` 跳到第一个可用节点。选线页加 `optional=1`。
+6. 通配根域写成 `*.0199x.app`（存成 `https://*.0199x.app/`）。每次打开会生成新的随机子域（如 `a1b2c3d4e5.0199x.app`），**不会**使用主域或 `www`。需先在 DNS 做好 `*.根域` 解析。
 
 域名密文密钥见 `JUMP_AES_KEY` / `JUMP_AES_IV`（及同名 `NEXT_PUBLIC_`）。只接受 `http`/`https`，内网地址不能写入。
 
