@@ -1,7 +1,11 @@
-import { randomUUID } from "crypto"
+import { randomBytes, randomUUID } from "crypto"
 import { updateStore } from "./store"
 import type { Domain, Site } from "./types"
 import { isSiteCode, isToken, normalizeHttpUrl } from "./urls"
+
+function makeToken() {
+  return randomBytes(8).toString("hex")
+}
 
 export class StoreError extends Error {
   status: number
@@ -61,7 +65,8 @@ export async function createSite(input: { name: string; siteCode: string; token:
   await updateStore((store) => {
     site.name = cleanName(input.name)
     site.siteCode = cleanSiteCode(input.siteCode, store.sites)
-    site.token = cleanToken(input.token)
+    const rawToken = input.token.trim() || makeToken()
+    site.token = cleanToken(rawToken)
     store.sites.unshift(site)
   })
 

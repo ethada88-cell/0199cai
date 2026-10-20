@@ -97,10 +97,12 @@ export function AdminClient() {
     setBusy(true)
     setError("")
     setNotice("")
+    const nextToken = token.trim() || randomToken()
+    if (!token.trim()) setToken(nextToken)
     const response = await fetch("/api/sites", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, siteCode, token }),
+      body: JSON.stringify({ name, siteCode, token: nextToken }),
     })
     setBusy(false)
     if (!response.ok) {
@@ -308,7 +310,12 @@ export function AdminClient() {
                 <Input aria-label="站点名称" placeholder="站点名称" value={name} onChange={(event) => setName(event.target.value)} />
                 <Input aria-label="站点代号" placeholder="站点代号" value={siteCode} onChange={(event) => setSiteCode(event.target.value)} />
                 <div className="flex gap-2">
-                  <Input aria-label="令牌" placeholder="令牌" value={token} onChange={(event) => setToken(event.target.value)} />
+                  <Input
+                    aria-label="令牌"
+                    placeholder="令牌（可留空自动生成）"
+                    value={token}
+                    onChange={(event) => setToken(event.target.value)}
+                  />
                   <Button type="button" variant="outline" onClick={() => setToken(randomToken())}>
                     生成
                   </Button>
