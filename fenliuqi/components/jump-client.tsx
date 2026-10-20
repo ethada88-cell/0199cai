@@ -37,6 +37,7 @@ export function JumpClient() {
         try {
           const query = new URLSearchParams({ siteCode, token })
           if (!isCheck) query.set("isCheck", "0")
+          if (optional) query.set("full", "1")
           const response = await fetch(`/api/jump?${query.toString()}`, {
             signal: controller.signal,
             cache: "no-store",
@@ -48,6 +49,14 @@ export function JumpClient() {
             return
           }
           setResult(body)
+          // 自动跳转：拿到最优线路后立刻进入，不再多等半秒
+          if (!optional) {
+            const best = body.lines.find((line) => line.id === body.fastestId)
+            if (best?.status === "ok") {
+              window.location.replace(best.url)
+              return
+            }
+          }
         } catch (err) {
           if ((err as Error).name === "AbortError") return
           setError("探测请求失败")
@@ -60,17 +69,9 @@ export function JumpClient() {
       controller.abort()
       window.clearTimeout(timer)
     }
-  }, [ready, siteCode, token, isCheck])
+  }, [ready, siteCode, token, isCheck, optional])
 
   const fastest = result?.lines.find((line) => line.id === result.fastestId) ?? null
-
-  useEffect(() => {
-    if (!result || optional || !fastest) return
-    const timer = window.setTimeout(() => {
-      window.location.replace(fastest.url)
-    }, 500)
-    return () => window.clearTimeout(timer)
-  }, [result, optional, fastest])
 
   function openDraft(manual: boolean) {
     const query = new URLSearchParams({
