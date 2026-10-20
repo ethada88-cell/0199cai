@@ -50,10 +50,12 @@ export function normalizeHttpUrl(input: string) {
 }
 
 /** 支持固定域名，或 *.0199x.app / wildcard:0199x.app（跳转时生成随机子域）。 */
-export function normalizeDomainEntry(input: string) {
+export function normalizeDomainEntry(input: string, options?: { wildcard?: boolean }) {
   const raw = input.trim()
   if (!raw) return null
+  const forceWild = Boolean(options?.wildcard)
   const looksWild =
+    forceWild ||
     raw.startsWith("*.") ||
     raw.toLowerCase().startsWith("wildcard:") ||
     /^https?:\/\/\*\./i.test(raw)
@@ -67,7 +69,11 @@ export function normalizeDomainEntry(input: string) {
   return normalizeHttpUrl(raw)
 }
 
-export function parseDomainLines(text: string) {
+export function isWildcardDomainUrl(url: string) {
+  return /^https?:\/\/\*\./i.test(String(url || "").trim())
+}
+
+export function parseDomainLines(text: string, options?: { wildcard?: boolean }) {
   const items: { url: string; label: string }[] = []
   const skipped: string[] = []
 
@@ -78,7 +84,7 @@ export function parseDomainLines(text: string) {
     const pieces = trimmed.split(/\s+\|\s+|\s{2,}|\t+/)
     const urlPart = pieces[0]?.trim() ?? ""
     const label = pieces.slice(1).join(" ").trim()
-    const url = normalizeDomainEntry(urlPart)
+    const url = normalizeDomainEntry(urlPart, options)
     if (!url) {
       skipped.push(trimmed)
       continue

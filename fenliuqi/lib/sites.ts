@@ -4,6 +4,8 @@ import { updateStore } from "./store"
 import type { Domain, Site } from "./types"
 import { isSiteCode, isToken, normalizeDomainEntry } from "./urls"
 
+type AddDomainEntry = { url: string; label: string; wildcard?: boolean }
+
 function makeToken() {
   return randomBytes(8).toString("hex")
 }
@@ -116,7 +118,7 @@ export async function deleteSite(id: string) {
   if (removed) await removeSiteDc(removed.siteCode, removed.token)
 }
 
-export async function addDomains(siteId: string, entries: { url: string; label: string }[]) {
+export async function addDomains(siteId: string, entries: AddDomainEntry[]) {
   if (!entries.length) throw new StoreError(400, "没有可添加的域名")
 
   const added: Domain[] = []
@@ -126,7 +128,7 @@ export async function addDomains(siteId: string, entries: { url: string; label: 
   await updateStore((store) => {
     const site = findSite(store.sites, siteId)
     for (const entry of entries) {
-      const url = normalizeDomainEntry(entry.url)
+      const url = normalizeDomainEntry(entry.url, { wildcard: entry.wildcard })
       if (!url) {
         skipped.push(entry.url)
         continue

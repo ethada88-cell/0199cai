@@ -12,21 +12,27 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     url?: string
     label?: string
     bulk?: string
+    wildcard?: boolean
   } | null
+
+  const wildcard = Boolean(body?.wildcard)
 
   if (body?.bulk !== undefined) {
     if (body.bulk.length > 20000) {
       return Response.json({ error: "名单太长，请分成几次添加" }, { status: 400 })
     }
-    const parsed = parseDomainLines(body.bulk)
+    const parsed = parseDomainLines(body.bulk, { wildcard })
     if (!parsed.items.length) {
       return Response.json(
-        { error: "没有识别到可用的网址", skipped: parsed.skipped },
+        { error: "没有识别到可用的网址（通配请勾选「通配符子域名」或写成 *.0199x.app）", skipped: parsed.skipped },
         { status: 400 }
       )
     }
     try {
-      const result = await addDomains(id, parsed.items)
+      const result = await addDomains(
+        id,
+        parsed.items.map((item) => ({ ...item, wildcard }))
+      )
       return Response.json({ ...result, skipped: [...parsed.skipped, ...result.skipped] })
     } catch (error) {
       return jsonError(error)
@@ -34,9 +40,19 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   try {
-    const result = await addDomains(id, [{ url: body?.url ?? "", label: body?.label ?? "" }])
+    const result = await addDomains(id, [
+      { url: body?.url ?? "", label: body?.label ?? "", wildcard },
+    ])
     if (!result.added.length) {
-      return Response.json({ error: "这个网址不能添加，或已经在列表里", ...result }, { status: 400 })
+      return Response.json(
+        {
+          error: wildcard
+            ? "这个通配根域不能添加，或已经在列表里（可填 0199x.app 或 *.0199x.app）"
+            : "这个网址不能添加，或已经在列表里",
+          ...result,
+        },
+        { status: 400 }
+      )
     }
     return Response.json(result, { status: 201 })
   } catch (error) {

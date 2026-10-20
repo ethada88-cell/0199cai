@@ -10,6 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { Site } from "@/lib/types"
 
+function isWildcardUrl(url: string) {
+  return /^https?:\/\/\*\./i.test(url)
+}
+
 function randomToken() {
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
   const bytes = new Uint8Array(10)
@@ -37,6 +41,7 @@ export function AdminClient() {
   const [url, setUrl] = useState("")
   const [label, setLabel] = useState("")
   const [bulk, setBulk] = useState("")
+  const [wildcardMode, setWildcardMode] = useState(true)
 
   const selected = sites.find((site) => site.id === selectedId) ?? null
 
@@ -137,7 +142,7 @@ export function AdminClient() {
     const response = await fetch(`/api/sites/${selected.id}/domains`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, label }),
+      body: JSON.stringify({ url, label, wildcard: wildcardMode }),
     })
     setBusy(false)
     if (!response.ok) {
@@ -146,7 +151,7 @@ export function AdminClient() {
     }
     setUrl("")
     setLabel("")
-    setNotice("已添加域名")
+    setNotice(wildcardMode ? "已添加通配符子域名（每次跳转自动生成随机子域）" : "已添加固定域名")
     await loadSites(selected.id)
   }
 
@@ -158,7 +163,7 @@ export function AdminClient() {
     const response = await fetch(`/api/sites/${selected.id}/domains`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bulk: text }),
+      body: JSON.stringify({ bulk: text, wildcard: wildcardMode }),
     })
     const body = (await response.json().catch(() => null)) as {
       error?: string
@@ -364,37 +369,50 @@ export function AdminClient() {
                 <CardHeader>
                   <CardTitle>添加域名</CardTitle>
                   <CardDescription>
-                    每行一个网址。通配根域用 <code>*.0199x.app</code>（每次跳转自动生成随机子域，不用主域/www）。名称写在竖线后。
+                    勾选「通配符子域名」后填根域即可（如 <code>0199x.app</code>），会存成{" "}
+                    <code>https://*.0199x.app/</code>，跳转时自动生成随机子域，不用主域/www。
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={wildcardMode}
+                      onChange={(event) => setWildcardMode(event.target.checked)}
+                    />
+                    <span>通配符子域名（推荐）</span>
+                  </label>
                   <form className="grid gap-2 sm:grid-cols-[1fr_180px_auto]" onSubmit={addOne}>
                     <Input
                       aria-label="域名"
-                      placeholder="*.0199x.app 或 https://a.example.com"
+                      placeholder={wildcardMode ? "0199x.app 或 *.0199x.app" : "https://0199a.com"}
                       value={url}
                       onChange={(event) => setUrl(event.target.value)}
                     />
                     <Input
                       aria-label="线路名称"
-                      placeholder="线路名称"
+                      placeholder={wildcardMode ? "通配线路" : "线路名称"}
                       value={label}
                       onChange={(event) => setLabel(event.target.value)}
                     />
                     <Button className="h-8" type="submit" disabled={busy}>
-                      添加
+                      {wildcardMode ? "添加通配" : "添加"}
                     </Button>
                   </form>
                   <Textarea
                     aria-label="批量域名"
-                    placeholder={"*.0199x.app | 通配X\n*.0199y.app | 通配Y\nhttps://a.example | 固定线路"}
+                    placeholder={
+                      wildcardMode
+                        ? "0199x.app | 通配X\n0199y.app | 通配Y\n0199z.app | 通配Z"
+                        : "https://0199a.com | 固定A\nhttps://0199b.com | 固定B"
+                    }
                     value={bulk}
                     onChange={(event) => setBulk(event.target.value)}
                     className="min-h-28"
                   />
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button type="button" disabled={busy || !bulk.trim()} onClick={() => void addBulk(bulk)}>
-                      粘贴导入
+                      {wildcardMode ? "批量导入通配" : "粘贴导入"}
                     </Button>
                     <Label className="inline-flex h-8 cursor-pointer items-center rounded-lg border px-2.5 text-sm">
                       上传 txt
@@ -429,6 +447,17 @@ export function AdminClient() {
                   {selected.domains.map((domain, index) => (
                     <div key={domain.id} className="grid gap-2 rounded-xl border p-3 md:grid-cols-[1fr_auto]">
                       <div className="min-w-0">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          {isWildcardUrl(domain.url) ? (
+                            <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                              通配符子域名
+                            </span>
+                          ) : (
+                            <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
+                              固定域名
+                            </span>
+                          )}
+                        </div>
                         <Input
                           aria-label="线路名称"
                           defaultValue={domain.label}
@@ -439,7 +468,10 @@ export function AdminClient() {
                             }
                           }}
                         />
-                        <p className="mt-2 truncate text-xs text-muted-foreground">{domain.url}</p>
+                        <p className="mt-2 truncate text-xs text-muted-foreground">
+                          {domain.url}
+                          {isWildcardUrl(domain.url) ? " → 每次自动生成随机子域" : ""}
+                        </p>
                       </div>
                       <div className="flex flex-wrap gap-2 md:justify-end">
                         <Button type="button" variant="outline" disabled={index === 0} onClick={() => void patchDomain(domain.id, { move: "up" })}>
