@@ -22,7 +22,7 @@ function seed(): Store {
     sites: [
       {
         id: randomUUID(),
-        name: "示例站点",
+        name: "久久彩",
         siteCode: "demo",
         token: "demo-token",
         createdAt: now,
