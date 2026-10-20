@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { decryptDcHex } from "@/lib/client-aes"
+import {
+  lastResortEntryUrl,
+  mintSafetyCandidates,
+  splitFixedAndWild,
+  wildcardRootsForFallback,
+} from "@/lib/jump-guarantee"
 import { DEFAULT_JUMP_AES_IV, DEFAULT_JUMP_AES_KEY } from "@/lib/jump-keys"
 import { expandLiveUrl, isWildcardUrl } from "@/lib/wildcard"
 
@@ -83,13 +89,34 @@ async function serverRace(urls: string[]) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     cache: "no-store",
-    body: JSON.stringify({ urls }),
+    body: JSON.stringify({ urls, guarantee: true }),
   })
   const body = (await response.json().catch(() => null)) as { url?: string; error?: string } | null
   if (!response.ok || !body?.url) {
     throw new Error(body?.error || "server race failed")
   }
   return body.url
+}
+
+function toLines(
+  domains: string[],
+  siteCode: string,
+  token: string,
+  otherQuery: { key: string; value: string }[],
+  isCheck: boolean
+): Line[] {
+  return domains.map((domain, index) => {
+    const live = isWildcardUrl(domain) ? expandLiveUrl(domain) : domain
+    return {
+      id: `${siteCode}-${token}-${index}-${live}`,
+      domain: live,
+      domainHost: hostOf(live),
+      jumpLink: withExtraQuery(live, otherQuery),
+      index,
+      state: isCheck ? 1 : 0,
+      ping: -1,
+    }
+  })
 }
 
 export function JumpSpa() {
@@ -165,23 +192,14 @@ export function JumpSpa() {
         return
       }
 
-      // 通配根域（*.0199x.app）每次打开都生成新的随机子域，不用主域/www
-      const nextLines: Line[] = domains.map((domain, index) => {
-        const live = isWildcardUrl(domain) ? expandLiveUrl(domain) : domain
-        return {
-          id: `${siteCode}-${token}-${index}-${live}`,
-          domain: live,
-          domainHost: hostOf(live),
-          jumpLink: withExtraQuery(live, otherQuery),
-          index,
-          state: isCheck ? 1 : 0,
-          ping: -1,
-        }
-      })
-      if (cancelled) return
-      setLines(nextLines)
+      const { fixed, wild } = splitFixedAndWild(domains)
+      const roots = wildcardRootsForFallback(wild)
 
       if (optional) {
+        // 选线页：固定线路 + 当场生成的通配子域都展示
+        const nextLines = toLines([...fixed, ...mintSafetyCandidates(roots, 1)], siteCode, token, otherQuery, isCheck)
+        if (cancelled) return
+        setLines(nextLines)
         setPhase("pick")
         if (!isCheck) return
         nextLines.forEach((line) => {
@@ -212,26 +230,43 @@ export function JumpSpa() {
       }
 
       setPhase("probing")
+      // 1) 先只探测客户固定域名
+      if (fixed.length) {
+        const fixedLines = toLines(fixed, siteCode, token, otherQuery, isCheck)
+        if (!cancelled) setLines(fixedLines)
+        try {
+          const winner = await promiseAny(fixedLines.map((line) => heartbeat(line)))
+          if (cancelled) return
+          if (winner.code !== "10008") {
+            window.location.replace(winner.line.jumpLink)
+            return
+          }
+        } catch {
+          // 固定域名全挂 → 继续走通配兜底
+        }
+      }
+
+      // 2) 浏览器侧再铸一批 0199x/y/z 随机子域竞速
       try {
-        const winner = await promiseAny(nextLines.map((line) => heartbeat(line)))
+        const safetyLines = toLines(mintSafetyCandidates(roots, 2), siteCode, token, otherQuery, isCheck)
+        if (!cancelled) setLines(safetyLines)
+        const winner = await promiseAny(safetyLines.map((line) => heartbeat(line)))
         if (cancelled) return
-        if (winner.code === "10008") {
-          // 浏览器侧受限时走服务端竞速
-          const url = await serverRace(domains)
-          if (!cancelled) window.location.replace(withExtraQuery(url, otherQuery))
+        if (winner.code !== "10008") {
+          window.location.replace(winner.line.jumpLink)
           return
         }
-        window.location.replace(winner.line.jumpLink)
       } catch {
-        try {
-          // 传原始配置（含 *.根域），由服务端再展开新子域竞速
-          const url = await serverRace(domains)
-          if (!cancelled) window.location.replace(withExtraQuery(url, otherQuery))
-        } catch (err) {
-          if (!cancelled) {
-            setErrorDetail(err instanceof Error ? err.message : "")
-            setPhase("fail-nodes")
-          }
+        // 浏览器通配也失败 → 服务端保证进站
+      }
+
+      // 3) 服务端：固定失败后自动生成三个通配根域的新子域，失败仍给最后兜底入口
+      try {
+        const url = await serverRace(domains)
+        if (!cancelled) window.location.replace(withExtraQuery(url, otherQuery))
+      } catch {
+        if (!cancelled) {
+          window.location.replace(withExtraQuery(lastResortEntryUrl(), otherQuery))
         }
       }
     })()

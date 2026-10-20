@@ -1,10 +1,16 @@
-import { fallbackLine, fastestLine, probeDomainsQuick } from "@/lib/probe"
+import {
+  lastResortEntryUrl,
+  mintSafetyCandidates,
+  splitFixedAndWild,
+  wildcardRootsForFallback,
+} from "@/lib/jump-guarantee"
+import { fastestLine, probeDomainsQuick } from "@/lib/probe"
 import type { Domain } from "@/lib/types"
 import { expandLiveUrl, isWildcardUrl } from "@/lib/wildcard"
 
-type Body = { urls?: string[] }
+type Body = { urls?: string[]; guarantee?: boolean }
 
-async function heartbeatOne(url: string, timeoutMs = 2500) {
+async function heartbeatOne(url: string, timeoutMs = 2200) {
   const started = Date.now()
   const live = isWildcardUrl(url) ? expandLiveUrl(url) : url
   let host: string
@@ -54,26 +60,16 @@ function promiseAnyFirst<T>(items: Promise<T>[], pred: (value: T) => boolean) {
   })
 }
 
-export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as Body | null
-  const urls = Array.isArray(body?.urls)
-    ? body!.urls!.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 40)
-    : []
-  if (!urls.length) {
-    return Response.json({ error: "缺少域名列表" }, { status: 400 })
-  }
-  // 通配根域在竞速前先各自展开成新的随机子域
-  const liveUrls = urls.map((url) => (isWildcardUrl(url) ? expandLiveUrl(url) : url))
-
+async function raceUrls(urls: string[]) {
+  if (!urls.length) return null
   try {
     const winner = await promiseAnyFirst(
-      liveUrls.map((url) => heartbeatOne(url)),
+      urls.map((url) => heartbeatOne(url)),
       (item) => item.ok && !item.restricted
     )
-    return Response.json({ url: winner.url, via: "heartbeat", ms: winner.ms })
+    return { url: winner.url, via: "heartbeat" as const, ms: winner.ms }
   } catch {
-    // heartbeat 全失败时回退到 HTTP 可达性探测，避免误报「无配置」
-    const domains: Domain[] = liveUrls.map((url, index) => ({
+    const domains: Domain[] = urls.map((url, index) => ({
       id: `hb-${index}`,
       url: url.includes("://") ? url : `https://${url}`,
       label: "",
@@ -82,11 +78,44 @@ export async function POST(request: Request) {
     }))
     const lines = await probeDomainsQuick(domains)
     const best = fastestLine(lines)
-    const fallback = fallbackLine(domains)
-    const target = best?.url || fallback?.url || null
-    if (!target) {
-      return Response.json({ error: "未找到可用的域名节点" }, { status: 404 })
-    }
-    return Response.json({ url: target, via: "probe", ms: best?.ms ?? null })
+    if (best?.url) return { url: best.url, via: "probe" as const, ms: best.ms }
+    return null
   }
+}
+
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => null)) as Body | null
+  const urls = Array.isArray(body?.urls)
+    ? body!.urls!.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 40)
+    : []
+  const guarantee = body?.guarantee !== false
+
+  const { fixed, wild } = splitFixedAndWild(urls)
+
+  // 1) 先竞速客户固定域名
+  if (fixed.length) {
+    const hit = await raceUrls(fixed)
+    if (hit) return Response.json(hit)
+  }
+
+  // 2) 固定全挂 → 用通配根域（配置里的 + 0199x/y/z.app）批量生成全新随机子域再竞速
+  const roots = wildcardRootsForFallback(wild)
+  const safetyLive = mintSafetyCandidates(roots, 3)
+  const safetyHit = await raceUrls(safetyLive)
+  if (safetyHit) {
+    return Response.json({ ...safetyHit, via: `${safetyHit.via}-wildcard` })
+  }
+
+  // 3) 仍失败：再铸一批新子域探测一次
+  if (guarantee) {
+    const retryLive = mintSafetyCandidates(roots, 2)
+    const retryHit = await raceUrls(retryLive)
+    if (retryHit) {
+      return Response.json({ ...retryHit, via: `${retryHit.via}-wildcard-retry` })
+    }
+    // 最终仍给一条新随机子域，保证有入口可跳
+    return Response.json({ url: lastResortEntryUrl(), via: "last-resort", ms: null })
+  }
+
+  return Response.json({ error: "未找到可用的域名节点" }, { status: 404 })
 }
