@@ -17,7 +17,7 @@ export default function HomePage() {
   function open(optional: boolean) {
     const params = new URLSearchParams({ siteCode: siteCode.trim(), token: token.trim() })
     if (optional) params.set("optional", "1")
-    router.push(`/go?${params.toString()}`)
+    router.push(`/jump?${params.toString()}`)
   }
 
   return (

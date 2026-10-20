@@ -46,10 +46,10 @@ SESSION_SECRET=一段足够长的随机字符串
    https://b.example | 备用线路
    ```
 
-4. 后台点「复制加密跳转链接」发给访问者。地址形如 `/go?d=...`，域名列表用 AES-256-GCM 加密进参数，不在链接里明文出现。
-5. 仍可复制明文链接 `/go?siteCode=...&token=...`（调试用）。选线页用加密选线链接（带 `optional=1`）。
+4. 后台点「复制跳转链接」发给访问者。地址形如 `/jump/?siteCode=demo&token=demo-token`（与常见 Vue 跳转页相同）。
+5. 浏览器会拉取 `/dc/{siteCode}-{token}.txt`（AES-128-CBC 密文），解密后对各域名 `POST /melody/api/v1/base/heartbeat`，`Promise.any` 跳到第一个可用节点。选线页加 `optional=1`。
 
-探测从运行这个程序的机器发出。目标站如果拒绝这台机器的访问，会被标成不可用，即使手机浏览器可以打开。只接受 `http` 和 `https`，内网地址和本机地址不能写入。加密密钥见环境变量 `CONFIG_SECRET`（未设置时回退到 `SESSION_SECRET`）。
+域名密文密钥见 `JUMP_AES_KEY` / `JUMP_AES_IV`（及同名 `NEXT_PUBLIC_`）。只接受 `http`/`https`，内网地址不能写入。
 
 ## 下载源码
 

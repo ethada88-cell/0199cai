@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "crypto"
+import { publishAllDc, publishSiteDc, removeSiteDc } from "./dc-publish"
 import { updateStore } from "./store"
 import type { Domain, Site } from "./types"
 import { isSiteCode, isToken, normalizeHttpUrl } from "./urls"
@@ -51,6 +52,10 @@ function findSite(sites: Site[], id: string) {
   return site
 }
 
+async function republish(site: Site) {
+  await publishSiteDc(site)
+}
+
 export async function createSite(input: { name: string; siteCode: string; token: string }) {
   const now = new Date().toISOString()
   const site: Site = {
@@ -69,7 +74,7 @@ export async function createSite(input: { name: string; siteCode: string; token:
     site.token = cleanToken(rawToken)
     store.sites.unshift(site)
   })
-
+  await republish(site)
   return site
 }
 
@@ -78,8 +83,10 @@ export async function updateSite(
   input: { name?: string; siteCode?: string; token?: string }
 ) {
   let updated: Site | undefined
+  let previous: { siteCode: string; token: string } | undefined
   await updateStore((store) => {
     const site = findSite(store.sites, id)
+    previous = { siteCode: site.siteCode, token: site.token }
     if (input.name !== undefined) site.name = cleanName(input.name)
     if (input.siteCode !== undefined) {
       site.siteCode = cleanSiteCode(input.siteCode, store.sites, id)
@@ -87,15 +94,26 @@ export async function updateSite(
     if (input.token !== undefined) site.token = cleanToken(input.token)
     updated = site
   })
+  if (
+    previous &&
+    updated &&
+    (previous.siteCode !== updated.siteCode || previous.token !== updated.token)
+  ) {
+    await removeSiteDc(previous.siteCode, previous.token)
+  }
+  await republish(updated!)
   return updated!
 }
 
 export async function deleteSite(id: string) {
+  let removed: Site | undefined
   await updateStore((store) => {
-    const index = store.sites.findIndex((site) => site.id === id)
+    const index = store.sites.findIndex((item) => item.id === id)
     if (index < 0) throw new StoreError(404, "站点不存在")
+    removed = store.sites[index]
     store.sites.splice(index, 1)
   })
+  if (removed) await removeSiteDc(removed.siteCode, removed.token)
 }
 
 export async function addDomains(siteId: string, entries: { url: string; label: string }[]) {
@@ -103,6 +121,7 @@ export async function addDomains(siteId: string, entries: { url: string; label: 
 
   const added: Domain[] = []
   const skipped: string[] = []
+  let siteSnap: Site | undefined
 
   await updateStore((store) => {
     const site = findSite(store.sites, siteId)
@@ -130,8 +149,9 @@ export async function addDomains(siteId: string, entries: { url: string; label: 
       site.domains.push(domain)
       added.push(domain)
     }
+    siteSnap = { ...site, domains: [...site.domains] }
   })
-
+  if (siteSnap) await republish(siteSnap)
   return { added, skipped }
 }
 
@@ -140,6 +160,7 @@ export async function updateDomain(
   domainId: string,
   input: { label?: string; enabled?: boolean; move?: "up" | "down" }
 ) {
+  let siteSnap: Site | undefined
   await updateStore((store) => {
     const site = findSite(store.sites, siteId)
     const index = site.domains.findIndex((domain) => domain.id === domainId)
@@ -157,14 +178,25 @@ export async function updateDomain(
       site.domains[index + 1] = domain
       site.domains[index] = next
     }
+    siteSnap = { ...site, domains: [...site.domains] }
   })
+  if (siteSnap) await republish(siteSnap)
 }
 
 export async function deleteDomain(siteId: string, domainId: string) {
+  let siteSnap: Site | undefined
   await updateStore((store) => {
     const site = findSite(store.sites, siteId)
     const index = site.domains.findIndex((domain) => domain.id === domainId)
     if (index < 0) throw new StoreError(404, "域名不存在")
     site.domains.splice(index, 1)
+    siteSnap = { ...site, domains: [...site.domains] }
   })
+  if (siteSnap) await republish(siteSnap)
+}
+
+export async function syncAllDcFiles() {
+  const { readStore } = await import("./store")
+  const store = await readStore()
+  await publishAllDc(store)
 }
