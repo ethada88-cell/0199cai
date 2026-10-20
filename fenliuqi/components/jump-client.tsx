@@ -1,9 +1,7 @@
 "use client"
 
-import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { ProbeLine } from "@/lib/types"
@@ -86,13 +84,6 @@ export function JumpClient() {
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <SiteHeader
-        aside={
-          <Button variant="outline" nativeButton={false} render={<Link href="/admin" />}>
-            后台
-          </Button>
-        }
-      />
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col items-center px-4 pb-16 pt-8 md:pt-16">
         {!ready ? (
           <form
@@ -122,9 +113,16 @@ export function JumpClient() {
         ) : (
           <div className="flex w-full flex-col items-center gap-6 text-center">
             <div>
-              <p className="text-sm text-muted-foreground">{result?.site.siteCode || siteCode}</p>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-                {loading ? "正在检查线路" : error ? "暂时进不去" : result?.site.name}
+              <h1 className="text-3xl font-semibold tracking-tight">
+                {loading
+                  ? "正在检查线路"
+                  : error
+                    ? "暂时进不去"
+                    : fastest && !optional && !hold
+                      ? "正在进入"
+                      : optional
+                        ? "选择线路"
+                        : "线路不可用"}
               </h1>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
                 {loading
@@ -132,10 +130,10 @@ export function JumpClient() {
                   : error
                     ? error
                     : fastest && !optional && !hold
-                      ? `即将进入${fastest.label}。`
+                      ? "请稍候。"
                       : optional
                         ? "选择一条线路进入。延迟越低，打开通常越快。"
-                        : "没有可用线路。可以重试，或到后台更换域名。"}
+                        : "没有可用线路，请稍后重试。"}
               </p>
             </div>
 
