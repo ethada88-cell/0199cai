@@ -91,29 +91,29 @@ export async function POST(request: Request) {
   const guarantee = body?.guarantee !== false
 
   const { fixed, wild } = splitFixedAndWild(urls)
-
-  // 1) 先竞速客户固定域名
-  if (fixed.length) {
-    const hit = await raceUrls(fixed)
-    if (hit) return Response.json(hit)
-  }
-
-  // 2) 固定全挂 → 用通配根域（配置里的 + 0199x/y/z.app）批量生成全新随机子域再竞速
   const roots = wildcardRootsForFallback(wild)
-  const safetyLive = mintSafetyCandidates(roots, 3)
-  const safetyHit = await raceUrls(safetyLive)
-  if (safetyHit) {
-    return Response.json({ ...safetyHit, via: `${safetyHit.via}-wildcard` })
+
+  // 1) 先走通配子域名（配置里的 *.0199x/y/z 等，当场展开）
+  const firstSubs = mintSafetyCandidates(roots.length ? roots : wildcardRootsForFallback([]), 1)
+  const firstHit = await raceUrls(firstSubs)
+  if (firstHit) {
+    return Response.json({ ...firstHit, via: `${firstHit.via}-sub` })
   }
 
-  // 3) 仍失败：再铸一批新子域探测一次
+  // 2) 再走新生成的一批随机子域名
+  const moreSubs = mintSafetyCandidates(roots.length ? roots : wildcardRootsForFallback([]), 3)
+  const moreHit = await raceUrls(moreSubs)
+  if (moreHit) {
+    return Response.json({ ...moreHit, via: `${moreHit.via}-sub-gen` })
+  }
+
+  // 3) 最后才走固定域名
+  if (fixed.length) {
+    const fixedHit = await raceUrls(fixed)
+    if (fixedHit) return Response.json({ ...fixedHit, via: `${fixedHit.via}-fixed` })
+  }
+
   if (guarantee) {
-    const retryLive = mintSafetyCandidates(roots, 2)
-    const retryHit = await raceUrls(retryLive)
-    if (retryHit) {
-      return Response.json({ ...retryHit, via: `${retryHit.via}-wildcard-retry` })
-    }
-    // 最终仍给一条新随机子域，保证有入口可跳
     return Response.json({ url: lastResortEntryUrl(), via: "last-resort", ms: null })
   }
 

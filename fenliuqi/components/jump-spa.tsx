@@ -196,8 +196,8 @@ export function JumpSpa() {
       const roots = wildcardRootsForFallback(wild)
 
       if (optional) {
-        // 选线页：固定线路 + 当场生成的通配子域都展示
-        const nextLines = toLines([...fixed, ...mintSafetyCandidates(roots, 1)], siteCode, token, otherQuery, isCheck)
+        // 选线页顺序：子域名 → 固定域名
+        const nextLines = toLines([...mintSafetyCandidates(roots, 1), ...fixed], siteCode, token, otherQuery, isCheck)
         if (cancelled) return
         setLines(nextLines)
         setPhase("pick")
@@ -230,37 +230,32 @@ export function JumpSpa() {
       }
 
       setPhase("probing")
-      // 1) 先只探测客户固定域名
-      if (fixed.length) {
-        const fixedLines = toLines(fixed, siteCode, token, otherQuery, isCheck)
-        if (!cancelled) setLines(fixedLines)
+      // 顺序：通配子域名 → 新生成的随机子域名 → 最后才固定域名
+      const tryRace = async (urls: string[]) => {
+        if (!urls.length) return false
+        const lines = toLines(urls, siteCode, token, otherQuery, isCheck)
+        if (!cancelled) setLines(lines)
         try {
-          const winner = await promiseAny(fixedLines.map((line) => heartbeat(line)))
-          if (cancelled) return
-          if (winner.code !== "10008") {
-            window.location.replace(winner.line.jumpLink)
-            return
-          }
-        } catch {
-          // 固定域名全挂 → 继续走通配兜底
-        }
-      }
-
-      // 2) 浏览器侧再铸一批 0199x/y/z 随机子域竞速
-      try {
-        const safetyLines = toLines(mintSafetyCandidates(roots, 2), siteCode, token, otherQuery, isCheck)
-        if (!cancelled) setLines(safetyLines)
-        const winner = await promiseAny(safetyLines.map((line) => heartbeat(line)))
-        if (cancelled) return
-        if (winner.code !== "10008") {
+          const winner = await promiseAny(lines.map((line) => heartbeat(line)))
+          if (cancelled) return true
+          if (winner.code === "10008") return false
           window.location.replace(winner.line.jumpLink)
-          return
+          return true
+        } catch {
+          return false
         }
-      } catch {
-        // 浏览器通配也失败 → 服务端保证进站
       }
 
-      // 3) 服务端：固定失败后自动生成三个通配根域的新子域，失败仍给最后兜底入口
+      // 1) 先走子域名（通配根域当场展开）
+      if (await tryRace(mintSafetyCandidates(roots, 1))) return
+
+      // 2) 再走新生成的一批随机子域名
+      if (await tryRace(mintSafetyCandidates(roots, 3))) return
+
+      // 3) 最后走固定域名
+      if (await tryRace(fixed)) return
+
+      // 服务端按同一顺序再保一次；仍失败则最后兜底随机子域
       try {
         const url = await serverRace(domains)
         if (!cancelled) window.location.replace(withExtraQuery(url, otherQuery))
