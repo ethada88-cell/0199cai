@@ -208,7 +208,28 @@ export function AdminClient() {
     if (manual) query.set("optional", "1")
     const link = `${window.location.origin}/go?${query.toString()}`
     await navigator.clipboard.writeText(link)
-    setNotice(manual ? "已复制选线链接" : "已复制自动跳转链接")
+    setNotice(manual ? "已复制明文选线链接" : "已复制明文自动跳转链接")
+  }
+
+  async function copyEncryptedLink(site: Site, manual: boolean) {
+    setError("")
+    const response = await fetch(`/api/sites/${site.id}/entry`, { cache: "no-store" })
+    const body = (await response.json().catch(() => null)) as {
+      link?: string
+      optionalLink?: string
+      error?: string
+    } | null
+    if (!response.ok || !body) {
+      setError(body?.error || "生成加密链接失败")
+      return
+    }
+    const link = manual ? body.optionalLink : body.link
+    if (!link) {
+      setError("生成加密链接失败")
+      return
+    }
+    await navigator.clipboard.writeText(link)
+    setNotice(manual ? "已复制加密选线链接" : "已复制加密跳转链接（域名已加密）")
   }
 
   if (authenticated === null) {
@@ -349,11 +370,14 @@ export function AdminClient() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                  <Button variant="outline" onClick={() => void copyLink(selected, false)}>
-                    复制自动跳转链接
+                  <Button onClick={() => void copyEncryptedLink(selected, false)}>
+                    复制加密跳转链接
                   </Button>
-                  <Button variant="outline" onClick={() => void copyLink(selected, true)}>
-                    复制选线链接
+                  <Button variant="outline" onClick={() => void copyEncryptedLink(selected, true)}>
+                    复制加密选线链接
+                  </Button>
+                  <Button variant="outline" onClick={() => void copyLink(selected, false)}>
+                    复制明文链接
                   </Button>
                   <Button variant="destructive" onClick={() => void removeSite(selected)}>
                     删除站点

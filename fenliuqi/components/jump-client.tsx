@@ -15,11 +15,12 @@ type JumpResult = {
 export function JumpClient() {
   const params = useSearchParams()
   const router = useRouter()
+  const d = params.get("d")?.trim() ?? ""
   const siteCode = params.get("siteCode")?.trim() ?? ""
   const token = params.get("token")?.trim() ?? ""
   const optional = params.get("optional") === "1"
   const isCheck = params.get("isCheck") !== "0"
-  const ready = Boolean(siteCode && token)
+  const ready = Boolean(d || (siteCode && token))
 
   const [draftCode, setDraftCode] = useState(siteCode)
   const [draftToken, setDraftToken] = useState(token)
@@ -35,7 +36,12 @@ export function JumpClient() {
         setLoading(true)
         setError("")
         try {
-          const query = new URLSearchParams({ siteCode, token })
+          const query = new URLSearchParams()
+          if (d) query.set("d", d)
+          else {
+            query.set("siteCode", siteCode)
+            query.set("token", token)
+          }
           if (!isCheck) query.set("isCheck", "0")
           if (optional) query.set("full", "1")
           const response = await fetch(`/api/jump?${query.toString()}`, {
@@ -49,11 +55,15 @@ export function JumpClient() {
             return
           }
           setResult(body)
-          // 自动跳转：拿到最优线路后立刻进入，不再多等半秒
           if (!optional) {
             const best = body.lines.find((line) => line.id === body.fastestId)
-            if (best?.status === "ok") {
+            if (best?.status === "ok" || best?.status === "skipped") {
               window.location.replace(best.url)
+              return
+            }
+            const firstOk = body.lines.find((line) => line.status === "ok")
+            if (firstOk) {
+              window.location.replace(firstOk.url)
               return
             }
           }
@@ -69,7 +79,7 @@ export function JumpClient() {
       controller.abort()
       window.clearTimeout(timer)
     }
-  }, [ready, siteCode, token, isCheck, optional])
+  }, [ready, d, siteCode, token, isCheck, optional])
 
   const fastest = result?.lines.find((line) => line.id === result.fastestId) ?? null
 
@@ -115,7 +125,7 @@ export function JumpClient() {
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">
                 {loading || (fastest && !optional)
-                  ? "正在为您选择最优线路"
+                  ? "获取域名节点中"
                   : error
                     ? "暂时进不去"
                     : optional

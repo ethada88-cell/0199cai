@@ -46,10 +46,10 @@ SESSION_SECRET=一段足够长的随机字符串
    https://b.example | 备用线路
    ```
 
-4. 复制自动跳转链接发给访问者。地址形如 `/go?siteCode=demo&token=demo-token`。
-5. 要让访问者自己选线路，使用带 `optional=1` 的链接。
+4. 后台点「复制加密跳转链接」发给访问者。地址形如 `/go?d=...`，域名列表用 AES-256-GCM 加密进参数，不在链接里明文出现。
+5. 仍可复制明文链接 `/go?siteCode=...&token=...`（调试用）。选线页用加密选线链接（带 `optional=1`）。
 
-探测从运行这个程序的机器发出。目标站如果拒绝这台机器的访问，会被标成不可用，即使手机浏览器可以打开。只接受 `http` 和 `https`，内网地址和本机地址不能写入。
+探测从运行这个程序的机器发出。目标站如果拒绝这台机器的访问，会被标成不可用，即使手机浏览器可以打开。只接受 `http` 和 `https`，内网地址和本机地址不能写入。加密密钥见环境变量 `CONFIG_SECRET`（未设置时回退到 `SESSION_SECRET`）。
 
 ## 下载源码
 
@@ -74,6 +74,7 @@ npm start
 ADMIN_USER=admin
 ADMIN_PASSWORD=admin123@
 SESSION_SECRET=一段足够长的随机字符串
+CONFIG_SECRET=另一段足够长的随机字符串
 ```
 
 程序默认监听 3000 端口。要换端口：
