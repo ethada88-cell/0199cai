@@ -8,12 +8,14 @@
 - 访客聊天: `https://{子域}.ojy0871.com/c/{slug}/`
 - API: `127.0.0.1:8088`（`online-cs-api.service`）
 
-## fenliuqi（空项目）
+## fenliuqi / 线路台
 
 - 服务器路径: `/www/wwwroot/fenliuqi`
 - 本仓库: `fenliuqi/`
 - 公网: https://fenliuqi.ojy0871.com
-- 状态: 空项目占位，不是在线客服
+- 后台: https://fenliuqi.ojy0871.com/admin
+- 服务: `fenliuqi-linegate.service` → `127.0.0.1:43127`
+- 说明: 多域名线路入口（Next.js），不是在线客服
 
 ## probe-gate 流量监测（Docker，与客服隔离）
 
