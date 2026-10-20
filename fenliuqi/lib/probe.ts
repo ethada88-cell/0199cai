@@ -1,8 +1,35 @@
 import type { Domain, ProbeLine } from "./types"
 
-const PROBE_TIMEOUT_MS = 1500
-const QUICK_CONCURRENCY = 8
-const QUICK_BUDGET_MS = 1800
+const PROBE_TIMEOUT_MS = 900
+const QUICK_TIMEOUT_MS = 700
+const QUICK_CONCURRENCY = 16
+const QUICK_BUDGET_MS = 1200
+
+/** Demo / seed hosts that should not win the auto-jump race. */
+const DEMO_HOST_RE = /^(www\.)?(example\.com|cloudflare\.com|linegate-down\.invalid)$/i
+
+function hostOf(value: string) {
+  try {
+    return new URL(value).host
+  } catch {
+    return value
+  }
+}
+
+function isDemoHost(url: string) {
+  return DEMO_HOST_RE.test(hostOf(url))
+}
+
+/** Prefer real lines first so seed domains do not burn the first concurrency slots. */
+function orderForQuick(domains: Domain[]) {
+  const real: Domain[] = []
+  const demo: Domain[] = []
+  for (const domain of domains) {
+    if (isDemoHost(domain.url)) demo.push(domain)
+    else real.push(domain)
+  }
+  return real.length ? [...real, ...demo] : domains
+}
 
 async function probeOne(domain: Domain, timeoutMs = PROBE_TIMEOUT_MS): Promise<ProbeLine> {
   const started = Date.now()
@@ -34,14 +61,6 @@ async function probeOne(domain: Domain, timeoutMs = PROBE_TIMEOUT_MS): Promise<P
       ms: null,
       detail: "无法连接",
     }
-  }
-}
-
-function hostOf(value: string) {
-  try {
-    return new URL(value).host
-  } catch {
-    return value
   }
 }
 
@@ -85,10 +104,10 @@ export async function probeDomains(domains: Domain[], check: boolean) {
 
 /**
  * 自动跳转用：并发探测，一出现可用线路立刻返回（不再等全部超时）。
- * 同批里若已有更快的 OK，会带上；未测完的标成未完成。
+ * 真实线路优先探测；同批里若已有 OK 立刻结束。
  */
 export async function probeDomainsQuick(domains: Domain[]) {
-  const enabled = domains.filter((domain) => domain.enabled)
+  const enabled = orderForQuick(domains.filter((domain) => domain.enabled))
   if (!enabled.length) return [] as ProbeLine[]
 
   return new Promise<ProbeLine[]>((resolve) => {
@@ -108,8 +127,8 @@ export async function probeDomainsQuick(domains: Domain[]) {
       if (done) return
       results[index] = line
       completed += 1
-      // 第一个可用线路立刻走，打开速度优先
-      if (line.status === "ok") {
+      // 第一个可用真实线路立刻走；演示域名不当作自动跳转赢家
+      if (line.status === "ok" && !isDemoHost(line.url)) {
         finish()
         return
       }
@@ -120,13 +139,11 @@ export async function probeDomainsQuick(domains: Domain[]) {
 
     const pump = () => {
       while (!done && cursor < enabled.length) {
-        const active = results.filter((line) => line === undefined).length
-        // count in-flight roughly: started - completed
         const inFlight = cursor - completed
         if (inFlight >= QUICK_CONCURRENCY) break
         const index = cursor
         cursor += 1
-        void probeOne(enabled[index]).then((line) => onResult(index, line))
+        void probeOne(enabled[index], QUICK_TIMEOUT_MS).then((line) => onResult(index, line))
       }
     }
 
@@ -138,9 +155,12 @@ export async function probeDomainsQuick(domains: Domain[]) {
 }
 
 export function fastestLine(lines: ProbeLine[]) {
-  return lines.reduce<ProbeLine | null>((best, line) => {
-    if (line.status !== "ok" || line.ms === null) return best
-    if (!best || best.ms === null || line.ms < best.ms) return line
+  // Prefer non-demo OK lines for auto-jump
+  const ranked = lines.filter((line) => line.status === "ok" && line.ms !== null)
+  const real = ranked.filter((line) => !isDemoHost(line.url))
+  const pool = real.length ? real : ranked
+  return pool.reduce<ProbeLine | null>((best, line) => {
+    if (!best || best.ms === null || (line.ms !== null && line.ms < best.ms)) return line
     return best
   }, null)
 }
