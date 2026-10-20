@@ -24,18 +24,20 @@ npm run dev
 
 - 站点代号 `demo`
 - 令牌 `demo-token`
-- 后台口令 `linegate-admin`
+- 后台账号 `admin`
+- 后台密码 `admin123@`
 
-部署前把口令和会话密钥写进环境变量，可参考 `.env.example`：
+部署前把账号、密码和会话密钥写进环境变量，可参考 `.env.example`：
 
 ```bash
-ADMIN_PASSWORD=你的口令
+ADMIN_USER=admin
+ADMIN_PASSWORD=admin123@
 SESSION_SECRET=一段足够长的随机字符串
 ```
 
 ## 怎么用
 
-1. 打开 `/admin`，用口令登录。
+1. 打开 `/admin`，用账号密码登录。
 2. 创建站点，记下站点代号和令牌。
 3. 单条添加域名，或粘贴多行，或上传 txt。一行一个网址，名称可以写在竖线后面：
 
@@ -66,10 +68,11 @@ npm run build
 npm start
 ```
 
-启动前编辑 `.env`，至少改掉这两项：
+启动前编辑 `.env`：
 
 ```bash
-ADMIN_PASSWORD=你的口令
+ADMIN_USER=admin
+ADMIN_PASSWORD=admin123@
 SESSION_SECRET=一段足够长的随机字符串
 ```
 

@@ -8,15 +8,23 @@ function secret() {
   return process.env.SESSION_SECRET || "linegate-dev-session-secret"
 }
 
-export function adminPassword() {
-  return process.env.ADMIN_PASSWORD || "linegate-admin"
+export function adminUser() {
+  return process.env.ADMIN_USER || "admin"
 }
 
-export function passwordMatches(input: string) {
-  const expected = Buffer.from(adminPassword())
-  const actual = Buffer.from(input)
-  if (actual.length !== expected.length) return false
-  return timingSafeEqual(actual, expected)
+export function adminPassword() {
+  return process.env.ADMIN_PASSWORD || "admin123@"
+}
+
+function safeEqualText(actual: string, expected: string) {
+  const a = Buffer.from(actual)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
+}
+
+export function credentialsMatch(username: string, password: string) {
+  return safeEqualText(username.trim(), adminUser()) && safeEqualText(password, adminPassword())
 }
 
 export function signSession() {

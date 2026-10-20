@@ -24,6 +24,7 @@ async function readError(response: Response) {
 
 export function AdminClient() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null)
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [sites, setSites] = useState<Site[]>([])
   const [selectedId, setSelectedId] = useState("")
@@ -73,13 +74,14 @@ export function AdminClient() {
     const response = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password }),
     })
     setBusy(false)
     if (!response.ok) {
       setError(await readError(response))
       return
     }
+    setUsername("")
     setPassword("")
     await loadSites()
   }
@@ -224,11 +226,19 @@ export function AdminClient() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle>登录后台</CardTitle>
-              <CardDescription>本地默认口令是 linegate-admin。</CardDescription>
+              <CardDescription>账号 admin，密码 admin123@。</CardDescription>
             </CardHeader>
             <CardContent>
               <form className="grid gap-3" onSubmit={login}>
-                <Label htmlFor="password">口令</Label>
+                <Label htmlFor="username">账号</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                />
+                <Label htmlFor="password">密码</Label>
                 <Input
                   id="password"
                   type="password"
