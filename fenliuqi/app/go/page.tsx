@@ -3,7 +3,7 @@ import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { JumpClient } from "@/components/jump-client"
 import { getLastGood, setLastGood } from "@/lib/last-good"
-import { fastestLine, probeDomainsQuick } from "@/lib/probe"
+import { fallbackLine, fastestLine, probeDomainsQuick } from "@/lib/probe"
 import { readStore } from "@/lib/store"
 
 export const dynamic = "force-dynamic"
@@ -50,9 +50,10 @@ async function pickAndRedirect(siteCode: string, token: string) {
 
   const lines = await probeDomainsQuick(site.domains)
   const best = fastestLine(lines)
-  if (!best?.url) return "down" as const
-  setLastGood(siteCode, best.url)
-  redirect(best.url)
+  const target = best?.url || fallbackLine(site.domains)?.url
+  if (!target) return "down" as const
+  setLastGood(siteCode, target)
+  redirect(target)
 }
 
 export default async function GoPage({ searchParams }: { searchParams: SearchParams }) {

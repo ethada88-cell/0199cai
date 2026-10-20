@@ -1,9 +1,9 @@
 import type { Domain, ProbeLine } from "./types"
 
-const PROBE_TIMEOUT_MS = 900
-const QUICK_TIMEOUT_MS = 700
-const QUICK_CONCURRENCY = 16
-const QUICK_BUDGET_MS = 1200
+const PROBE_TIMEOUT_MS = 2500
+const QUICK_TIMEOUT_MS = 2200
+const QUICK_CONCURRENCY = 8
+const QUICK_BUDGET_MS = 3200
 
 /** Demo / seed hosts that should not win the auto-jump race. */
 const DEMO_HOST_RE = /^(www\.)?(example\.com|cloudflare\.com|linegate-down\.invalid)$/i
@@ -39,11 +39,19 @@ async function probeOne(domain: Domain, timeoutMs = PROBE_TIMEOUT_MS): Promise<P
       redirect: "manual",
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
-      headers: { "User-Agent": "LinegateHealth/1.0" },
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      },
     })
     await response.body?.cancel()
     const ms = Date.now() - started
-    const ok = response.status >= 200 && response.status < 400
+    // 3xx 也算可达；部分线路对探测返回 403/405 仍可浏览器打开
+    const ok =
+      (response.status >= 200 && response.status < 400) ||
+      response.status === 403 ||
+      response.status === 405
     return {
       id: domain.id,
       label: domain.label || hostOf(domain.url),
@@ -163,4 +171,10 @@ export function fastestLine(lines: ProbeLine[]) {
     if (!best || best.ms === null || (line.ms !== null && line.ms < best.ms)) return line
     return best
   }, null)
+}
+
+/** 探测全失败时仍尽量跳转，避免误报「线路不可用」。 */
+export function fallbackLine(domains: Domain[]): Domain | null {
+  const enabled = orderForQuick(domains.filter((domain) => domain.enabled && !isDemoHost(domain.url)))
+  return enabled[0] ?? null
 }
