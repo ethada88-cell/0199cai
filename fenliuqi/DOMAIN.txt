@@ -1,3 +1,4 @@
 Domain: fenliuqi.ojy0871.com
-Status: empty project
+App: linegate (线路台)
 Public: https://fenliuqi.ojy0871.com
+Admin: https://fenliuqi.ojy0871.com/admin

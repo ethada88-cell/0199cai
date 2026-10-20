@@ -1,0 +1,19 @@
+[Unit]
+Description=fenliuqi linegate (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/www/wwwroot/fenliuqi
+EnvironmentFile=/www/wwwroot/fenliuqi/.env
+Environment=PORT=43127
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/npm run start -- -H 127.0.0.1 -p 43127
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
