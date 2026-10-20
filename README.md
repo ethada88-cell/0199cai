@@ -8,14 +8,12 @@
 - 访客聊天: `https://{子域}.ojy0871.com/c/{slug}/`
 - API: `127.0.0.1:8088`（`online-cs-api.service`）
 
-## fenliuqi（隔离客服实例）
+## fenliuqi（空项目）
 
 - 服务器路径: `/www/wwwroot/fenliuqi`
-- 本仓库部署说明: `fenliuqi/`
-- 控制台: https://fenliuqi.ojy0871.com/login/
-- 访客: `https://fenliuqi.ojy0871.com/c/{slug}/?a={agent}`
-- API: `127.0.0.1:19088`（`fenliuqi-api.service`）
-- 独立 Postgres DB `fenliuqi_cs`、Redis DB `2`、上传目录；与现网 online-cs 数据隔离
+- 本仓库: `fenliuqi/`
+- 公网: https://fenliuqi.ojy0871.com
+- 状态: 空项目占位，不是在线客服
 
 ## probe-gate 流量监测（Docker，与客服隔离）
 
