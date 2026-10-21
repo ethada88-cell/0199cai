@@ -68,7 +68,43 @@
     })();
   </script>
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-  <link rel="preconnect" href="https://m.ojy0871.com" />
+  <!-- 内嵌官网地址加密；运行时解密，页面源码不出现明文站点 -->
+  <script>
+    window.__OCS_SITE_CFG = {
+      d: "505793A55631ABD0A200B220D8F9080F88995CF25D6385689E0DC08CE940EE5D45133AE59ABB0EDC520D9F1A1A3B2ADE",
+      k: "01sg4CXbluB1it3b",
+      i: "Tssmyuzo24eraO5f"
+    };
+    window.__ocsDecryptSiteOrigin = async function () {
+      try {
+        var cfg = window.__OCS_SITE_CFG || {};
+        var hex = String(cfg.d || "").trim();
+        var keyStr = String(cfg.k || "");
+        var ivStr = String(cfg.i || "");
+        if (!hex || keyStr.length !== 16 || ivStr.length !== 16) return "";
+        var bytes = new Uint8Array(hex.length / 2);
+        for (var n = 0; n < bytes.length; n++) bytes[n] = parseInt(hex.substr(n * 2, 2), 16);
+        var key = await crypto.subtle.importKey(
+          "raw",
+          new TextEncoder().encode(keyStr),
+          { name: "AES-CBC" },
+          false,
+          ["decrypt"]
+        );
+        var plain = await crypto.subtle.decrypt(
+          { name: "AES-CBC", iv: new TextEncoder().encode(ivStr) },
+          key,
+          bytes
+        );
+        var json = JSON.parse(new TextDecoder().decode(plain) || "{}");
+        var origin = String(json.origin || "").trim().replace(/\/$/, "");
+        if (!/^https?:\/\//i.test(origin)) return "";
+        return origin;
+      } catch (e) {
+        return "";
+      }
+    };
+  </script>
   <link rel="preconnect" href="https://h5cmd-aly.vdokmj.cn" crossorigin />
   <link rel="dns-prefetch" href="https://minio-img-6.fgsas.cn" />
   <title>在线咨询</title>
@@ -85,7 +121,7 @@
       --app-h:100dvh;
       --app-top:0px;
       --tabbar-h: 56px;
-      --site-origin: https://m.ojy0871.com;
+      --site-origin: ;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body {
@@ -429,7 +465,7 @@
       <span>菜单</span>
     </button>
   </header>
-  <iframe id="siteEmbed" class="site-embed" title="官网" src="about:blank" data-src="https://m.ojy0871.com/?showBottomTab=false#/" allow="fullscreen; payment; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
+  <iframe id="siteEmbed" class="site-embed" title="官网" src="about:blank" data-src="" allow="fullscreen; payment; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
   <button type="button" class="fab-chat" id="fabChat" aria-label="打开客服" hidden>客服</button>
   <div class="chat-shell mode-chat" id="chatShell">
   <div class="card">
@@ -1826,13 +1862,29 @@
 
 
       // 底部导航 = 官网 tab；接待=客服页，其它项懒加载官网对应路由。
-      (function bindEmbedShell() {
+      // 内嵌官网 origin 来自加密配置，页面源码不写明文站点。
+      (async function bindEmbedShell() {
         document.body.classList.add("embed-app");
         const shell = document.getElementById("chatShell");
         const frame = document.getElementById("siteEmbed");
         const tabbar = document.getElementById("siteTabbar");
         const params = new URLSearchParams(location.search);
-        const siteOrigin = (params.get("embed_origin") || "https://m.ojy0871.com").replace(/\/$/, "");
+        // 仅调试可用明文 embed_origin；正式走加密配置
+        let siteOrigin = (params.get("embed_origin") || "").trim().replace(/\/$/, "");
+        if (!siteOrigin && typeof window.__ocsDecryptSiteOrigin === "function") {
+          try { siteOrigin = (await window.__ocsDecryptSiteOrigin()) || ""; } catch (_) { siteOrigin = ""; }
+        }
+        siteOrigin = String(siteOrigin || "").replace(/\/$/, "");
+        if (siteOrigin) {
+          try {
+            document.documentElement.style.setProperty("--site-origin", siteOrigin);
+            if (frame) frame.setAttribute("data-src", siteOrigin + "/?showBottomTab=false#/");
+            var pre = document.createElement("link");
+            pre.rel = "preconnect";
+            pre.href = siteOrigin;
+            document.head.appendChild(pre);
+          } catch (_) {}
+        }
         let mode = "chat";
         let currentHash = "#/";
         let lastFrameSrc = "";
@@ -1843,6 +1895,7 @@
           if (/^https?:\/\//i.test(h)) return h;
           if (h.charAt(0) === "/" && h.charAt(1) !== "/") return h;
           if (h.charAt(0) !== "#") h = "#/" + h.replace(/^\/?/, "");
+          if (!siteOrigin) return "about:blank";
           // 官网自带底栏与外壳导航重复。站点读取 ?showBottomTab=false 后不渲染 v-bottom-navigation。
           const q = "showBottomTab=false";
           const search = h.indexOf("showBottomTab=") >= 0 ? "" : ("?" + q);
