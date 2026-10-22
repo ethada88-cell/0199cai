@@ -353,7 +353,7 @@
       border:0; z-index:1; background:#fff;
     }
     .liuhe-top {
-      display:none;
+      display:none !important; /* 六合资料页隐藏外壳抬头（logo/菜单） */
       position:absolute; top:0; left:0; right:0; z-index:8;
       min-height:52px;
       padding: calc(4px + env(safe-area-inset-top)) 78px 4px 12px;
@@ -361,10 +361,10 @@
       align-items:center; justify-content:center;
       box-sizing:border-box;
     }
-    body.liuhe-on .liuhe-top { display:flex; }
+    /* 裁掉内嵌页自带顶部大 logo，避免双抬头 */
     body.liuhe-on .site-embed {
-      top: var(--liuhe-top, 52px);
-      height: calc(100% - var(--liuhe-top, 52px));
+      top: calc(-1 * var(--liuhe-crop, 118px));
+      height: calc(100% + var(--liuhe-crop, 118px));
       bottom: auto;
     }
     .liuhe-top .brand-logo { height:40px; }
@@ -1926,17 +1926,17 @@
         function syncLiuheChrome() {
           const on = mode === "site" && isLiuhe(currentHash);
           document.body.classList.toggle("liuhe-on", on);
-          const bar = document.getElementById("liuheTop");
           if (!frame) return;
           if (!on) {
             frame.style.top = "";
             frame.style.height = "";
             return;
           }
-          const h = bar ? bar.offsetHeight : 52;
-          document.documentElement.style.setProperty("--liuhe-top", h + "px");
-          frame.style.top = h + "px";
-          frame.style.height = "calc(100% - " + h + "px)";
+          // 外壳抬头已隐藏；只上移 iframe 裁掉内嵌页头部 logo
+          const crop = 118;
+          document.documentElement.style.setProperty("--liuhe-crop", crop + "px");
+          frame.style.top = "-" + crop + "px";
+          frame.style.height = "calc(100% + " + crop + "px)";
         }
         function apply() {
           if (!shell) return;
