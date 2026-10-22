@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <!-- ocs-entry-20261022a -->
+  <!-- ocs-entry-20261022b -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <script>
@@ -364,9 +364,9 @@
       align-items:center; justify-content:center;
       box-sizing:border-box;
     }
-    /* 上移裁掉内嵌页顶部 logo；bottom 钉死在 stage-main，防止列表被底栏截断 */
+    /* 只裁掉内嵌页顶部固定 logo（约 48px），保留澳门/香港开奖区；bottom 钉死防底栏挡列表 */
     body.liuhe-on .site-embed {
-      top: calc(-1 * var(--liuhe-crop, 118px));
+      top: calc(-1 * var(--liuhe-crop, 56px));
       right:0;
       bottom:0;
       left:0;
@@ -1940,8 +1940,8 @@
             frame.style.height = "";
             return;
           }
-          // 外壳抬头已隐藏；上移裁掉内嵌顶部 logo，底部钉在 stage-main，避免列表被 tabbar 挡住
-          const crop = 118;
+          // 只裁内嵌固定 logo，保持澳门/香港开奖 + 列表样式；底边钉在 stage-main，不被 tabbar 挡住
+          const crop = 56;
           const main = document.getElementById("stageMain");
           const mainH = main ? main.clientHeight : 0;
           document.documentElement.style.setProperty("--liuhe-crop", crop + "px");
