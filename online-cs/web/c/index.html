@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <!-- ocs-entry-20261019q -->
+  <!-- ocs-entry-20261022a -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <script>
@@ -346,6 +346,9 @@
       width:100%;
       overflow:hidden;
       background:#fff;
+      /* 裁切上移后的 iframe，避免底部伸进 tabbar */
+      contain:paint;
+      isolation:isolate;
     }
     .site-embed {
       position:absolute; inset:0;
@@ -361,11 +364,13 @@
       align-items:center; justify-content:center;
       box-sizing:border-box;
     }
-    /* 裁掉内嵌页自带顶部大 logo，避免双抬头 */
+    /* 上移裁掉内嵌页顶部 logo；bottom 钉死在 stage-main，防止列表被底栏截断 */
     body.liuhe-on .site-embed {
       top: calc(-1 * var(--liuhe-crop, 118px));
-      height: calc(100% + var(--liuhe-crop, 118px));
-      bottom: auto;
+      right:0;
+      bottom:0;
+      left:0;
+      height:auto;
     }
     .liuhe-top .brand-logo { height:40px; }
     .liuhe-menu {
@@ -1929,14 +1934,22 @@
           if (!frame) return;
           if (!on) {
             frame.style.top = "";
+            frame.style.right = "";
+            frame.style.bottom = "";
+            frame.style.left = "";
             frame.style.height = "";
             return;
           }
-          // 外壳抬头已隐藏；只上移 iframe 裁掉内嵌页头部 logo
+          // 外壳抬头已隐藏；上移裁掉内嵌顶部 logo，底部钉在 stage-main，避免列表被 tabbar 挡住
           const crop = 118;
+          const main = document.getElementById("stageMain");
+          const mainH = main ? main.clientHeight : 0;
           document.documentElement.style.setProperty("--liuhe-crop", crop + "px");
           frame.style.top = "-" + crop + "px";
-          frame.style.height = "calc(100% + " + crop + "px)";
+          frame.style.right = "0";
+          frame.style.bottom = "0";
+          frame.style.left = "0";
+          frame.style.height = mainH > 0 ? (mainH + crop) + "px" : "auto";
         }
         function apply() {
           if (!shell) return;
