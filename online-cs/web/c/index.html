@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <!-- ocs-entry-20261022c -->
+  <!-- ocs-entry-20261022d -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <script>
@@ -120,7 +120,7 @@
       --muted:#9aa0a6;
       --app-h:100dvh;
       --app-top:0px;
-      --tabbar-h: 56px;
+      --tabbar-h: 68px;
       --site-origin: ;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -406,7 +406,7 @@
       flex:0 0 auto;
       width:100%;
       min-height:var(--tabbar-h);
-      padding:6px 2px calc(6px + env(safe-area-inset-bottom, 0px));
+      padding:8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
       background:#1a1a1a;
       display:flex; align-items:flex-start; justify-content:space-around;
       border-top:1px solid #2a2a2a;
@@ -418,20 +418,20 @@
     .site-tabbar button {
       flex:1; min-width:0; border:0; background:transparent; color:#cfcfcf;
       padding:2px 0 0; cursor:pointer; display:flex; flex-direction:column;
-      align-items:center; gap:3px; font-size:10px; line-height:1.1;
-      font-family:inherit; -webkit-tap-highlight-color:transparent;
+      align-items:center; gap:4px; font-size:12px; line-height:1.15;
+      font-weight:600; font-family:inherit; -webkit-tap-highlight-color:transparent;
       touch-action:manipulation;
     }
     .site-tabbar button .ico {
-      width:28px; height:28px; display:grid; place-items:center;
+      width:34px; height:34px; display:grid; place-items:center;
       border-radius:50%;
     }
     .site-tabbar button .ico svg {
-      width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.7;
+      width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:1.7;
       stroke-linecap:round; stroke-linejoin:round;
     }
     .site-tabbar button .ico img {
-      width:20px; height:20px; display:block; object-fit:contain;
+      width:24px; height:24px; display:block; object-fit:contain;
     }
     .site-tabbar button:not(.active) .ico img { filter: brightness(0) invert(82%); }
     .site-tabbar button.active .ico img { filter: brightness(0) invert(1); }
