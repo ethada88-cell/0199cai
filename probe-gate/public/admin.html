@@ -248,10 +248,6 @@
             <svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h10"/></svg>
             刷量检测
           </button>
-          <button type="button" class="nav-item" data-view="outbound">
-            <svg viewBox="0 0 24 24"><rect x="4" y="5" width="12" height="12" rx="2"/><path d="M12 8h7v7M19 8l-7 7"/></svg>
-            出站点击
-          </button>
         </nav>
       </aside>
 
@@ -274,13 +270,17 @@
       <main class="content" id="app"></main>
 
       <nav class="bottomnav" id="bottomnav">
+        <button type="button" data-view="overview">
+          <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 16l3-4 3 2 5-7"/></svg>
+          概览
+        </button>
         <button type="button" data-view="detect">
           <svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h10"/></svg>
           刷量检测
         </button>
-        <button type="button" data-view="outbound">
-          <svg viewBox="0 0 24 24"><rect x="4" y="5" width="12" height="12" rx="2"/><path d="M12 8h7v7M19 8l-7 7"/></svg>
-          出站点击
+        <button type="button" data-view="account">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 19c1.5-3.2 4-5 7-5s5.5 1.8 7 5"/></svg>
+          账号
         </button>
       </nav>
     </div>
@@ -389,7 +389,9 @@
         $("#userMenu").classList.toggle("on", state.userMenuOpen);
       }
       function setView(view) {
-        state.view = view || "detect";
+        let v = view || "detect";
+        if (v === "outbound") v = "detect";
+        state.view = v;
         sessionStorage.setItem("probe-admin-view", state.view);
         setMenu(false);
         setUserMenu(false);
@@ -589,6 +591,10 @@
               <div class="stat"><span>豁免条目</span><strong>${(C.ipAllow || 0) + (C.uaAllow || 0) + (C.fpAllow || 0)}</strong><em>真人/滑过</em></div>
             </div>
           </div>
+          <div class="card split">
+            <div><h3>来源</h3><ul class="list">${tops(s.sources)}</ul></div>
+            <div><h3>来路流量</h3><ul class="list">${tops(s.refs)}</ul></div>
+          </div>
           <div class="card">
             <h3>脚本安装</h3>
             <p class="hint">把探测脚本挂到落地页后才有数据。脚本地址：<code>${escapeHtml(probeUrl())}</code></p>
@@ -736,22 +742,11 @@
           </div>`;
       }
 
-      function renderOutbound(s) {
-        return `
-          <div class="card">
-            <h3>出站点击 / 来路</h3>
-            <p class="hint">按当前查询区间汇总来源与来路域名。点名称可筛到刷量检测明细。</p>
-            <div class="split">
-              <div><h3>来源</h3><ul class="list">${tops(s.sources)}</ul></div>
-              <div><h3>来路流量</h3><ul class="list">${tops(s.refs)}</ul></div>
-            </div>
-          </div>`;
-      }
-
       function render() {
         if (!token) return loginView();
         loginWrap.style.display = "none";
         shell.classList.add("on");
+        if (state.view === "outbound") state.view = "detect";
         syncChrome();
         const s = (state.pack && state.pack.summary) || { realPv: 0, fakePv: 0, trap: 0, trapClose: 0, pv: 0, sources: [], refs: [], kinds: [] };
         const items = (state.pack && state.pack.items) || [];
@@ -763,7 +758,6 @@
 
         if (state.view === "overview") app.innerHTML = renderOverview(s, L, C, St);
         else if (state.view === "account") app.innerHTML = renderAccount();
-        else if (state.view === "outbound") app.innerHTML = renderOutbound(s);
         else app.innerHTML = renderDetect(s, items, total, rate);
 
         bindPanel(items, total);
