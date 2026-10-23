@@ -4,12 +4,13 @@
  * 下面几类会弹窗（trap=true），真人浏览器不弹：
  * 1. crawler     爬虫 / 扫描器 / 脚本 UA
  * 2. headless    无头浏览器（webdriver、HeadlessChrome）
- * 3. automation  自动化伪装（隐匿 webdriver / 指纹不一致 / 驱动残留）
- * 4. emulator    模拟器 / 云手机
+ * 3. emulator    模拟器 / 云手机（硬证据，或「强环境矛盾+辅证」）
+ * 4. automation  自动化伪装（驱动残留 / 硬指纹矛盾）
  * 5. datacenter  云厂商 / 机房 IP
- *
- * 后台「刷量检测」和前台弹窗用的是同一套结果。
  * 6. learned     自学习记忆命中（历史假量指纹 / IP / 人工标注）
+ *
+ * 精准策略：弱信号（仅无触控、仅缺传感器、桌面网站模式）不再单独定罪。
+ * 后台「刷量检测」和前台弹窗用的是同一套结果。
  */
 import { applyLearning } from "./learn.mjs";
 
@@ -302,7 +303,7 @@ function isHeadless(signals) {
 
 /**
  * 自动化伪装：UA 像真人，但指纹 / 驱动残留 / 请求头暴露自动化。
- * 命中即假量（与无头同级弹窗）。
+ * 硬证据直接命中；软打分须含硬信号且阈值更高，减少隐私浏览器误伤。
  */
 function isAutomationDisguise(signals, ua, req) {
   const s = signals && typeof signals === "object" ? signals : {};
@@ -311,32 +312,42 @@ function isAutomationDisguise(signals, ua, req) {
   if (s.domWebdriver) return true;
 
   let score = 0;
+  let hard = 0;
   const uaChrome = Boolean(s.uaChrome) || (/Chrome\//i.test(ua) && !/Edg\//i.test(ua));
   const uaMobile = Boolean(s.uaMobile) || /Mobile|Android|iPhone|iPad/i.test(ua);
 
-  // Chrome UA 却没有 window.chrome
-  if (uaChrome && s.chrome === false) score += 3;
-  // 桌面 Chrome 插件数为 0（常见于无头 / 伪浏览器）
+  // Chrome UA 却没有 window.chrome（强）
+  if (uaChrome && s.chrome === false) {
+    hard += 1;
+    score += 3;
+  }
+  // 软件光栅 WebGL（强）
+  if (/SwiftShader|llvmpipe|Software Rasterizer|mesa offscreen|VirtioGPU|Virtio/i.test(String(s.webgl || ""))) {
+    hard += 1;
+    score += 3;
+  }
+  // 窗口外尺寸 0（强）
+  if (String(s.outer || "") === "0x0") {
+    hard += 1;
+    score += 2;
+  }
+  // 桌面 Chrome 插件数为 0
   if (uaChrome && !uaMobile && Number(s.plugins) === 0) score += 2;
   // languages 为空
   if (Number(s.languages) === 0) score += 2;
-  // 窗口外尺寸 0
-  if (String(s.outer || "") === "0x0") score += 2;
-  // 软件渲染 WebGL
-  if (/SwiftShader|llvmpipe|Software Rasterizer|mesa offscreen|Virtio/i.test(String(s.webgl || ""))) score += 3;
-  // 手机 UA 却无触控点
-  if (uaMobile && Number(s.touch) === 0) score += 2;
+  // 手机 UA 无触控：弱信号
+  if (uaMobile && Number(s.touch) === 0) score += 1;
   // 异常硬件并发
-  if (s.hw === 0 || s.hw === 1 && uaChrome && Number(s.plugins) === 0) score += 1;
-  // Chrome 却没有 chrome.runtime（自动化常见）
+  if (s.hw === 0 || (s.hw === 1 && uaChrome && Number(s.plugins) === 0)) score += 1;
+  // Chrome 却没有 chrome.runtime + 无插件
   if (uaChrome && s.chrome === true && s.chromeRuntime === false && Number(s.plugins) === 0) score += 1;
 
   // 请求头缺失只作弱信号（隐私浏览器也可能缺）
   const al = req && req.headers ? req.headers["accept-language"] : "";
   if (looksLikePersonBrowser(ua) && !al) score += 1;
 
-  // 阈值偏高：减少插件数/缺头等边缘信号误伤真人
-  return score >= 4;
+  // 须有至少 1 个硬信号，且总分够高
+  return hard >= 1 && score >= 5;
 }
 
 /** 从完整 URL 取出主机名，去掉 www. */
@@ -398,13 +409,19 @@ export function sourceOf(ref, utm, selfHost) {
 const EMULATOR_UA_RE =
   /Emulator|Android SDK built for|sdk_gphone|google_sdk|Genymotion|BlueStacks|MuMu|NoxPlayer|\bNox\b|LDPlayer|雷电|夜神|逍遥|天天模拟器|mumu|memu|remixos|AndyDroid|Windroy|Droid4X|HMSCore.?Emulator|goldfish|ranchu|ttVM_Hdragon|VirtualBox|VBox|VMware|QEMU|Bochs|云手机|CloudPhone|Cloud.?Phone|CloudMobile|云真机|红手指|RedFinger|HongShouZhi|多多云|DuoDuoYun|duoduoyun|网易.?MUMU|腾讯.?手游助手|腾讯.?云.?手机|华为.?云.?手机|小米.?云.?手机|百度.?云.?手机|vmos|光速虚拟|VMOS|PhoneMaster|模拟器|x86_64.+Mobile|iPhone.?Simulator|iOS.?Simulator/i;
 
-/** WebGL 渲染器：模拟器 / 虚拟显卡常见值 */
+/** WebGL 渲染器：模拟器 / 虚拟显卡常见值（不含 Apple Software Renderer，以免误伤桌面 Safari 调试） */
 const EMULATOR_WEBGL_RE =
-  /Android Emulator|Emulator|SwiftShader|llvmpipe|softpipe|Gallium|VirGL|Virtio|VMware|SVGA3D|Microsoft Basic Render|Google SwiftShader|ANGLE \(Google|OpenGL ES.+Emulator|Adreno.?\(TM\).?Emulator|Mali.?Emulator|Apple Software Renderer/i;
+  /Android Emulator|Emulator|SwiftShader|llvmpipe|softpipe|Gallium|VirGL|Virtio|VMware|SVGA3D|Microsoft Basic Render|Google SwiftShader|OpenGL ES.+Emulator|Adreno.?\(TM\).?Emulator|Mali.?Emulator/i;
+
+/** iPhone/iPad 在 Mac 上「请求桌面网站」时 platform 常为 MacIntel/MacARM，不当作模拟器 */
+function isAppleDesktopMode(ua, platform) {
+  return /iPhone|iPad/i.test(String(ua || "")) && /MacIntel|MacARM|MacPPC/i.test(String(platform || ""));
+}
 
 /**
- * 模拟器 / 云手机判定。
- * 关键词直接命中，或「手机 UA + 桌面环境 / 无触控 / 虚拟 GPU」等组合打分。
+ * 模拟器 / 云手机判定（偏精准，减少真人误伤）。
+ * - 硬证据：已知模拟器 UA、虚拟 GPU、注入桥 → 直接假量
+ * - 软打分：须「强环境矛盾」+ 足够辅证；单纯无触控/无传感器不再单独定罪
  */
 function isEmulatorOrCloudPhone(signals, ua, req) {
   const s = signals && typeof signals === "object" ? signals : {};
@@ -416,34 +433,42 @@ function isEmulatorOrCloudPhone(signals, ua, req) {
   if (s.emulatorBridge || s.cloudPhoneHook) return true;
 
   let score = 0;
+  let strong = 0;
   const uaMobile = Boolean(s.uaMobile) || /Mobile|Android|iPhone|iPad/i.test(u);
   const platform = String(s.platform || "");
-  const desktopPlat = /Win32|Win64|Windows|MacIntel|MacPPC|Linux x86_64|Linux i686|Linux amd64/i.test(platform);
+  const winOrLinuxX86 = /Win32|Win64|Windows|Linux x86_64|Linux i686|Linux amd64/i.test(platform);
   const armPlat = /arm|aarch64|iPhone|iPad/i.test(platform);
+  const appleDesk = isAppleDesktopMode(u, platform);
 
-  // 手机 UA 跑在桌面 / x86 平台上（经典模拟器）
-  if (uaMobile && desktopPlat && !armPlat) score += 4;
-  // iPhone UA 却不是 Apple 平台
-  if (/iPhone|iPad/i.test(u) && platform && !/iPhone|iPad|MacIntel|MacARM/i.test(platform)) score += 4;
-  // 手机 UA 无触控
-  if (uaMobile && Number(s.touch) === 0) score += 2;
-  // 手机却完全没有方向 / 运动传感器 API
-  if (uaMobile && s.hasOrientation === false && s.hasMotion === false) score += 2;
-  // 屏幕比例异常：极扁或桌面分辨率却挂 Mobile UA
+  // 手机 UA 跑在 Windows / Linux x86 上（经典模拟器 / 云手机）——强信号
+  if (uaMobile && winOrLinuxX86 && !armPlat) {
+    strong += 1;
+    score += 4;
+  }
+  // iPhone UA 却落在非 Apple 平台（Win/Linux）——强信号；Mac 桌面模式豁免
+  if (/iPhone|iPad/i.test(u) && platform && !/iPhone|iPad|MacIntel|MacARM|MacPPC/i.test(platform)) {
+    strong += 1;
+    score += 4;
+  }
+  // 桌面模式只记弱分，避免「请求桌面网站」误杀
+  if (appleDesk) score += 1;
+
+  // 以下为辅证（单独不够）
+  if (uaMobile && Number(s.touch) === 0) score += 1;
+  if (uaMobile && s.hasOrientation === false && s.hasMotion === false) score += 1;
   try {
     const parts = String(s.screen || "0x0").split("x");
     const w = Number(parts[0]) || 0;
     const h = Number(parts[1]) || 0;
     if (uaMobile && w >= 1280 && h >= 720 && Number(s.dpr || 1) === 1) score += 1;
-    if (uaMobile && w > 0 && h > 0 && (w / h > 2.4 || h / w > 2.4)) score += 1;
+    if (uaMobile && w > 0 && h > 0 && (w / h > 2.6 || h / w > 2.6)) score += 1;
   } catch (_) {}
-  // Android Chrome 却报 desktop platform 已在上面；再加：Android UA + hw 特别像虚拟机（很多核但无触控）
   if (/Android/i.test(u) && Number(s.touch) === 0 && Number(s.hw) >= 8) score += 1;
-  // 连接类型 ethernet / 无网络信息却是手机（弱信号）
-  if (uaMobile && String(s.netType || "") === "ethernet") score += 2;
+  // ethernet 在真手机上少见，但部分车机/TV WebView 会有，降为弱信号
+  if (uaMobile && String(s.netType || "") === "ethernet") score += 1;
 
-  // 阈值偏高：减少家宽 / 少见机型误伤
-  return score >= 4;
+  // 精准策略：至少 1 个强环境矛盾，且总分 ≥ 5；纯弱信号堆叠不弹窗
+  return strong >= 1 && score >= 5;
 }
 
 export const KIND_NAME = {
