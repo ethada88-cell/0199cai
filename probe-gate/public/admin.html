@@ -657,6 +657,7 @@
                 <option value="emulator"${state.kind === "emulator" ? " selected" : ""}>模拟器/云手机</option>
                 <option value="learned"${state.kind === "learned" ? " selected" : ""}>智能学习</option>
               </select>
+              <p class="hint" style="margin:0">评分：0–19 正常 · 20–39 观察 · 40–69 高可疑(验证) · ≥70 确认假量</p>
               <input id="q" type="search" value="${state.q.replace(/"/g, "&quot;")}" placeholder="搜来源、来路、IP、UA、指纹" />
             </div>
             <button type="button" class="btn block" id="query">${state.busy ? "查询中…" : "查询"}</button>
@@ -714,12 +715,13 @@
             <p class="hint">明细 ${total} 条${state.ok ? ` · <span class="okmsg">${state.ok}</span>` : ""}${state.err ? ` · <span class="err">${state.err}</span>` : ""}</p>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>时间</th><th>判定</th><th>来源</th><th>来路</th><th>页面</th><th>访客</th><th>纠错</th></tr></thead>
+                <thead><tr><th>时间</th><th>等级</th><th>判定</th><th>来源</th><th>来路</th><th>页面</th><th>访客</th><th>纠错</th></tr></thead>
                 <tbody>
                   ${
                     items.length
                       ? items.map((ev, idx) => `<tr>
                         <td>${escapeHtml(ev.at || "")}<p class="sub">${typeName(ev.type)}</p></td>
+                        <td>${escapeHtml(ev.levelName || (ev.fake ? "假量" : "正常"))}<p class="sub">${ev.score != null ? ev.score + " 分" : ""}${(ev.reasons && ev.reasons.length) ? " · " + escapeHtml(ev.reasons.slice(0, 2).join("、")) : ""}</p></td>
                         <td>${escapeHtml(ev.kindName || (ev.fake ? "假量" : "真实用户"))}<p class="sub">${escapeHtml(ev.siteName || "")}${ev.learnReason ? " · " + escapeHtml(ev.learnReason) : ""}</p></td>
                         <td>${escapeHtml(ev.source || "直接访问")}</td>
                         <td>${escapeHtml(ev.refHost || "直接访问")}${ev.ref ? `<p class="sub">${escapeHtml(ev.ref)}</p>` : ""}</td>
@@ -730,7 +732,7 @@
                           <button type="button" class="btn ghost" data-mark="human" data-i="${idx}" style="height:32px;padding:0 10px">真人</button>
                         </td>
                       </tr>`).join("")
-                      : `<tr><td colspan="7" class="hint">${state.busy ? "加载中…" : "暂无记录。请先把嵌入代码挂到网站后再查询。"}</td></tr>`
+                      : `<tr><td colspan="8" class="hint">${state.busy ? "加载中…" : "暂无记录。请先把嵌入代码挂到网站后再查询。"}</td></tr>`
                   }
                 </tbody>
               </table>

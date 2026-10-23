@@ -13,6 +13,7 @@
  * 后台「刷量检测」和前台弹窗用的是同一套结果。
  */
 import { applyLearning } from "./learn.mjs";
+import { buildScore } from "./score.mjs";
 
 export function clientIp(req) {
   // 优先取反代传来的真实 IP，避免只看到 127.0.0.1
@@ -504,8 +505,8 @@ function pickRef(req, body, host) {
 
 /**
  * 一次请求的完整判定结果。
- * trap === true 时，前端必须弹出「访问核验」。
- * 静态规则之后还会套用自学习记忆（见 learn.mjs）。
+ * 评分分级（方案落地）：0–19 正常 / 20–39 观察 / 40–69 高可疑·验证 / ≥70 确认假量。
+ * trap === true（score≥40）时，前端弹出「访问核验」。
  */
 export function classifyRequest(req, body = {}) {
   const ip = clientIp(req);
@@ -517,7 +518,6 @@ export function classifyRequest(req, body = {}) {
   const utm = String(body.utm || "").slice(0, 60);
   const source = sourceOf(ref, utm, host);
   const kind = classifyKind(ip, ua, body.signals, req);
-  const fake = kind !== "human";
   const base = {
     ip,
     ua,
@@ -526,19 +526,40 @@ export function classifyRequest(req, body = {}) {
     source,
     kind,
     kindName: KIND_NAME[kind] || kind,
-    trap: fake,
-    fake,
+    // 先按类型占位，学习与评分后再覆盖 trap/fake
+    trap: kind !== "human",
+    fake: kind !== "human",
   };
-  return applyLearningSafe(base, body.signals || {});
+  return applyLearningSafe(base, body.signals || {}, ua);
 }
 
-function applyLearningSafe(base, signals) {
+function applyLearningSafe(base, signals, ua) {
+  let out = base;
   try {
-    const out = applyLearning(base, signals);
+    out = applyLearning(base, signals);
     out.kindName = KIND_NAME[out.kind] || out.kindName || out.kind;
-    out.trap = Boolean(out.fake);
-    return out;
   } catch {
-    return base;
+    out = base;
   }
+  try {
+    const scored = buildScore(out, ua || out.ua || "", signals);
+    out.score = scored.score;
+    out.level = scored.level;
+    out.levelName = scored.levelName;
+    out.reasons = scored.reasons;
+    out.watch = scored.watch;
+    out.trap = scored.trap;
+    out.fake = scored.fake;
+    // 观察档保持 kind=human，便于统计「未定罪」
+    if (scored.watch && out.kind === "human") {
+      out.labelHint = "观察";
+    }
+  } catch {
+    out.score = out.fake ? 70 : 0;
+    out.level = out.fake ? "fake" : "normal";
+    out.levelName = out.fake ? "假量" : "正常";
+    out.reasons = [];
+    out.watch = false;
+  }
+  return out;
 }

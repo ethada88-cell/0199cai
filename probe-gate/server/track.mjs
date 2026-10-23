@@ -227,8 +227,12 @@ function normalize(raw, ctx) {
     source,
     kind,
     kindName: KIND_NAME[kind] || kind,
-    fake: kind !== "human",
+    fake: cls.fake != null ? Boolean(cls.fake) : kind !== "human",
     trap: Boolean(cls.trap && (type === "probe" || type === "trap-close" || type === "page")),
+    score: Number(cls.score) || 0,
+    level: clip(cls.level || "", 20),
+    levelName: clip(cls.levelName || "", 20),
+    reasons: Array.isArray(cls.reasons) ? cls.reasons.slice(0, 8).map((x) => clip(x, 40)) : [],
     x: Math.round(num(raw.x, 0, 4000)),
     y: Math.round(num(raw.y, 0, 8000)),
     nx: Math.round(num(raw.nx, 0, 100)),
@@ -279,13 +283,17 @@ export function probeVisit(req, body = {}) {
   } catch {
     /* learn must not break probe */
   }
-  const label = cls.fake
-    ? cls.kind === "learned"
-      ? "智能学习·" + (cls.learnReason || "记忆命中")
-      : String(process.env.PROBE_MODE || "silent").toLowerCase() === "popup"
-        ? "假量弹窗"
-        : "假量检测"
-    : "真实访问";
+  const label = cls.watch
+    ? "观察流量"
+    : cls.fake
+      ? cls.level === "fake"
+        ? cls.kind === "learned"
+          ? "确认假量·学习命中"
+          : "确认假量"
+        : cls.kind === "learned"
+          ? "高可疑·" + (cls.learnReason || "记忆命中")
+          : "高可疑·待验证"
+      : "真实访问";
   const ev = normalize(
     {
       type: "probe",
@@ -311,6 +319,11 @@ export function probeVisit(req, body = {}) {
     silent: mode !== "popup",
     kind: cls.kind,
     kindName: cls.kindName,
+    score: cls.score || 0,
+    level: cls.level || "normal",
+    levelName: cls.levelName || "正常",
+    reasons: Array.isArray(cls.reasons) ? cls.reasons : [],
+    watch: Boolean(cls.watch),
     source: cls.source,
     ref: cls.ref,
     refHost: hostOf(cls.ref) || "直接访问",
