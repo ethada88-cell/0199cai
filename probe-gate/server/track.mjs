@@ -263,8 +263,36 @@ export function ingestTrack(req, body) {
   const ctx = { ip: cls.ip, ua: cls.ua, now: Date.now(), cls, host: cls.host };
   let n = 0;
   for (const raw of list.slice(0, 40)) {
-    const ev = normalize(raw, ctx);
+    // 滑动通过事件：强制记为真量，不沿用弹窗前的假量判定
+    const isSlideOk = String(raw?.type || "") === "trap-close" || String(raw?.label || "").includes("滑动验证通过");
+    const useCls = isSlideOk
+      ? {
+          ...cls,
+          kind: "human",
+          kindName: "真实用户",
+          fake: false,
+          trap: false,
+          watch: false,
+          score: 0,
+          level: "normal",
+          levelName: "正常",
+          reasons: ["滑动验证通过"],
+          learnReason: "滑动验证通过",
+        }
+      : cls;
+    const ev = normalize(raw, { ...ctx, cls: useCls });
     if (!ev) continue;
+    if (isSlideOk) {
+      ev.kind = "human";
+      ev.kindName = "真实用户";
+      ev.fake = false;
+      ev.trap = false;
+      ev.score = 0;
+      ev.level = "normal";
+      ev.levelName = "正常";
+      ev.reasons = ["滑动验证通过"];
+      ev.label = "滑动验证通过";
+    }
     queue.push(ev);
     n += 1;
   }
@@ -312,11 +340,12 @@ export function probeVisit(req, body = {}) {
     queue.push(ev);
     setImmediate(flush);
   }
-  const mode = String(process.env.PROBE_MODE || "silent").toLowerCase();
-  const showTrap = mode === "popup" && cls.trap;
+  const mode = String(process.env.PROBE_MODE || "popup").toLowerCase();
+  // 假量一律弹窗（score≥40 / fake=true）；滑动通过后 trap=false 记真量
+  const showTrap = Boolean(cls.trap || cls.fake);
   return {
     trap: showTrap,
-    silent: mode !== "popup",
+    silent: false,
     kind: cls.kind,
     kindName: cls.kindName,
     score: cls.score || 0,
@@ -329,6 +358,7 @@ export function probeVisit(req, body = {}) {
     refHost: hostOf(cls.ref) || "直接访问",
     fp: cls.fp || "",
     learnReason: cls.learnReason || "",
+    mode,
   };
 }
 

@@ -3,13 +3,13 @@
  *
  * 用法：<script src="https://你的域名/probe.js"></script>
  *
- * 默认：判定为假量才出「滑动验证」；滑对即记为真量，真实用户平时无感。
- * 只统计不验证：<script src=".../probe.js" data-mode="silent"></script>
+ * 规则：判定为假量一律弹「滑动验证」；滑动通过 = 真量并豁免，后续不再弹。
+ * 真实用户（正常/观察）不弹窗。
  *
  * 流程：
  * 1. POST /api/probe 上报指纹
- * 2. 服务器判定爬虫 / 无头 / 自动化 / 模拟器云手机 / 机房 / 学习记忆
- * 3. trap=true 时拉滑动验证；验证成功 = 真量并豁免
+ * 2. 服务器评分：假量(≥40) → trap=true
+ * 3. 弹窗滑动；验证成功 → 记真量 + IP/指纹豁免
  */
 (function () {
   var KEY = "probe-slide-ok";
@@ -22,7 +22,7 @@
   }
   if (script && script.getAttribute("data-api")) BASE = String(script.getAttribute("data-api")).replace(/\/$/, "");
   var SITE = (script && script.getAttribute("data-site")) || location.host || "web";
-  var MODE = ((script && script.getAttribute("data-mode")) || "popup").toLowerCase(); // popup | silent
+  var MODE = "popup"; // 假量一律弹窗；不再支持 silent 关闭验证
   var skip = ((script && script.getAttribute("data-skip")) || "admin").split(",").map(function (s) {
     return s.trim();
   });
@@ -400,11 +400,10 @@
 
   function run() {
     if (shouldSkip()) return;
-    if (MODE === "popup") {
-      try {
-        if (sessionStorage.getItem(KEY) === "1") return;
-      } catch (e) {}
-    }
+    // 本页已滑动通过 → 本会话视为真量，不再弹
+    try {
+      if (sessionStorage.getItem(KEY) === "1") return;
+    } catch (e) {}
     post("/api/probe", {
       page: pagePath() + location.search,
       pageTitle: document.title,
@@ -417,7 +416,7 @@
     })
       .then(function (j) {
         var data = j && (j.data || j);
-        if (MODE !== "popup") return;
+        // 服务器判定假量 → 必须弹窗；滑动通过后记真量
         if (data && data.trap) showSlide(data);
       })
       .catch(function () {});

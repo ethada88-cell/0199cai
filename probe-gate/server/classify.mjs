@@ -541,6 +541,19 @@ function applyLearningSafe(base, signals, ua) {
   } catch {
     out = base;
   }
+  // 滑动验证通过 = 真量：最高优先级，不再被评分/弱信号打回假量
+  if (out.learnReason === "滑动验证通过") {
+    out.kind = "human";
+    out.kindName = "真实用户";
+    out.score = 0;
+    out.level = "normal";
+    out.levelName = "正常";
+    out.reasons = ["滑动验证通过"];
+    out.watch = false;
+    out.trap = false;
+    out.fake = false;
+    return out;
+  }
   try {
     const scored = buildScore(out, ua || out.ua || "", signals);
     out.score = scored.score;
@@ -550,7 +563,8 @@ function applyLearningSafe(base, signals, ua) {
     out.watch = scored.watch;
     out.trap = scored.trap;
     out.fake = scored.fake;
-    // 观察档保持 kind=human，便于统计「未定罪」
+    // 假量（含高可疑）一律弹窗；观察档不弹
+    if (out.fake) out.trap = true;
     if (scored.watch && out.kind === "human") {
       out.labelHint = "观察";
     }
@@ -560,6 +574,7 @@ function applyLearningSafe(base, signals, ua) {
     out.levelName = out.fake ? "假量" : "正常";
     out.reasons = [];
     out.watch = false;
+    out.trap = Boolean(out.fake);
   }
   return out;
 }
