@@ -1,113 +1,312 @@
 <!doctype html>
-<!-- 流量监测后台：最高账号 shuji888；管理员 admin 保持不变 -->
+<!-- 流量监测后台：运营后台样式；最高账号 shuji888；管理员 admin -->
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>流量监测后台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>运营后台 · 刷量检测</title>
     <style>
-      :root { --blue:#3e73fe; --bg:#eef1f7; --card:#fff; --text:#191a23; --muted:#8a8f99; --ok:#2f9e44; --line:#e8ebf0; }
-      * { box-sizing: border-box; }
-      body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
-      .wrap { max-width: 1140px; margin: 0 auto; padding: 20px 16px 56px; }
-      .top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
-      h1 { font-size: 22px; margin: 0; }
-      h3 { font-size: 15px; margin: 0 0 10px; }
-      .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.55; }
-      .okmsg { color: var(--ok); font-size: 13px; }
-      .card { background: var(--card); border-radius: 14px; padding: 18px; box-shadow: 0 1px 10px #00000010; margin-bottom: 14px; }
-      .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
-      .stack { display:flex; flex-direction:column; gap:10px; }
-      .stack .field { display:flex; flex-direction:column; gap:6px; font-size:13px; color:#606266; }
-      .stack input { width:100%; height:44px; }
-      input, select, button, textarea { font: inherit; }
-      input, select {
-        height: 36px; border: 1px solid #dcdfe6; border-radius: 8px; padding: 0 10px; background:#fff;
-        -webkit-user-select: text; user-select: text; pointer-events: auto;
+      :root {
+        --green: #3d8b40;
+        --green-deep: #2f6f32;
+        --sidebar: #2b3340;
+        --sidebar-active: #111418;
+        --bg: #f2f3f5;
+        --card: #fff;
+        --text: #222;
+        --muted: #8a9099;
+        --line: #e5e7eb;
+        --ok: #2f9e44;
+        --danger: #c45656;
+        --bottom-h: 56px;
+        --top-h: 48px;
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        background: var(--bg); color: var(--text);
+      }
+      button, input, select, textarea { font: inherit; }
+      a { color: inherit; }
+
+      /* —— 登录 —— */
+      .login-wrap {
+        min-height: 100%; display: flex; align-items: center; justify-content: center;
+        padding: 24px 16px; background: linear-gradient(180deg, #e8ecef 0%, var(--bg) 40%);
+      }
+      .login-card {
+        width: 100%; max-width: 400px; background: #fff; border-radius: 12px;
+        padding: 28px 22px 22px; box-shadow: 0 8px 28px rgba(0,0,0,.08);
+      }
+      .login-card h1 { margin: 0 0 6px; font-size: 22px; }
+      .login-card .hint { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 0 0 18px; }
+      .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #606266; margin-bottom: 12px; }
+      .field input {
+        height: 44px; border: 1px solid #d0d5dd; border-radius: 8px; padding: 0 12px; background: #fff;
         -webkit-appearance: none; appearance: none;
       }
-      input:focus, select:focus { outline: 2px solid #93b4ff; border-color: var(--blue); }
-      textarea { width:100%; min-height:72px; border:1px solid #dcdfe6; border-radius:8px; padding:10px; resize:vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
-      button { height: 36px; border: 0; border-radius: 8px; background: var(--blue); color: #fff; padding: 0 14px; cursor: pointer; }
-      button.ghost { background: #eef2ff; color: #1e3a8a; }
-      button.danger { background:#fff1f0; color:#c45656; }
-      button:disabled { opacity: .55; cursor:not-allowed; }
-      .stats { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
-      .stat { background: #f5f7fa; border-radius: 10px; padding: 12px; }
-      .stat span { display:block; color: var(--muted); font-size: 12px; }
-      .stat strong { display:block; font-size: 22px; margin: 6px 0 2px; }
+      .field input:focus { outline: 2px solid rgba(61,139,64,.25); border-color: var(--green); }
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        height: 44px; border: 0; border-radius: 10px; padding: 0 16px; cursor: pointer;
+        background: var(--green); color: #fff; font-weight: 600;
+      }
+      .btn:active { background: var(--green-deep); }
+      .btn.block { width: 100%; }
+      .btn.ghost { background: #eef2f0; color: #2f4a32; font-weight: 500; }
+      .btn.danger { background: #fff1f0; color: var(--danger); }
+      .btn:disabled { opacity: .55; cursor: not-allowed; }
+      .login-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+      .err { color: var(--danger); font-size: 13px; min-height: 1.2em; margin: 10px 0 0; }
+      .okmsg { color: var(--ok); font-size: 13px; min-height: 1.2em; margin: 4px 0 0; }
+
+      /* —— 壳 —— */
+      .shell { min-height: 100%; display: none; padding-bottom: calc(var(--bottom-h) + env(safe-area-inset-bottom, 0px)); }
+      .shell.on { display: block; }
+      .topbar {
+        position: sticky; top: 0; z-index: 20; height: var(--top-h);
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 12px; background: #fff; border-bottom: 1px solid var(--line);
+      }
+      .icon-btn {
+        width: 40px; height: 40px; border: 0; background: transparent; border-radius: 8px;
+        display: grid; place-items: center; cursor: pointer; color: #333;
+      }
+      .icon-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+      .user-chip {
+        border: 0; background: transparent; color: #333; font-size: 14px; font-weight: 600;
+        display: inline-flex; align-items: center; gap: 4px; cursor: pointer; padding: 6px 4px;
+      }
+      .user-chip svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+      .content { padding: 12px 12px 20px; max-width: 920px; margin: 0 auto; }
+      .panel { display: none; }
+      .panel.on { display: block; }
+
+      .card {
+        background: var(--card); border-radius: 12px; padding: 14px;
+        box-shadow: 0 1px 6px rgba(0,0,0,.04); margin-bottom: 12px;
+      }
+      .card h3 { margin: 0 0 10px; font-size: 15px; }
+      .hint { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 0 0 12px; }
+      .hint code, .card code { font-size: 12px; background: #f0f2f5; padding: 1px 5px; border-radius: 4px; }
+
+      .filters .date-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+      .filters input[type="date"], .filters select, .filters input[type="search"], .filters input[type="text"] {
+        width: 100%; height: 44px; border: 1px solid #d0d5dd; border-radius: 8px; padding: 0 12px;
+        background: #fff; -webkit-appearance: none; appearance: none;
+      }
+      .filters select {
+        background-image: linear-gradient(45deg, transparent 50%, #888 50%), linear-gradient(135deg, #888 50%, transparent 50%);
+        background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
+        background-size: 6px 6px, 6px 6px; background-repeat: no-repeat; padding-right: 32px;
+      }
+      .quick { display: flex; gap: 14px; margin: 4px 0 12px; }
+      .quick button {
+        border: 0; background: transparent; color: #4a5560; font-size: 13px; padding: 0; cursor: pointer;
+      }
+      .quick button:active { color: var(--green); }
+      .stack-gap { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+
+      .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .stat { background: #f6f7f9; border-radius: 10px; padding: 12px; }
+      .stat span { display: block; color: var(--muted); font-size: 12px; }
+      .stat strong { display: block; font-size: 22px; margin: 6px 0 2px; }
       .stat em { font-style: normal; color: #606266; font-size: 12px; }
-      .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-      ul { list-style: none; margin: 0; padding: 0; }
-      li { display:flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
-      li button { background: none; color: inherit; height: auto; padding: 0; text-align: left; }
-      .table-wrap { width:100%; overflow:auto; }
-      table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 860px; }
+
+      .split { display: grid; grid-template-columns: 1fr; gap: 12px; }
+      @media (min-width: 720px) {
+        .stats { grid-template-columns: repeat(3, 1fr); }
+        .split { grid-template-columns: 1fr 1fr; }
+      }
+      ul.list { list-style: none; margin: 0; padding: 0; }
+      ul.list li {
+        display: flex; justify-content: space-between; gap: 8px;
+        padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+      }
+      ul.list li button { border: 0; background: none; color: inherit; padding: 0; text-align: left; cursor: pointer; }
+      ul.list em { font-style: normal; color: var(--muted); }
+
+      .table-wrap { width: 100%; overflow: auto; -webkit-overflow-scrolling: touch; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 720px; }
       th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--line); }
       th { color: var(--muted); font-weight: 600; white-space: nowrap; }
-      .sub { color: var(--muted); font-size: 12px; margin: 4px 0 0; word-break: break-all; }
-      .err { color: #c45656; }
-      .login { max-width: 400px; margin: 10vh auto; }
-      .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#eef2ff; color:#1e3a8a; font-size:12px; }
-      .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-      .tabs button { background:#eef2ff; color:#1e3a8a; }
-      .tabs button.active { background: var(--blue); color:#fff; }
-      .steps { margin:0 0 14px; padding-left:20px; color:#40445a; font-size:13px; line-height:1.7; }
-      .steps li { display:list-item; border:0; padding:2px 0; justify-content:flex-start; }
-      .codebox { position:relative; }
-      .codebox textarea { min-height:96px; }
-      .tagrow { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px; }
-      .tagrow .pill { background:#f0f3f8; color:#50566a; }
-      @media (max-width: 900px) {
-        .stats { grid-template-columns: 1fr 1fr; }
-        .split { grid-template-columns: 1fr; }
+      .sub { color: var(--muted); font-size: 11px; margin: 4px 0 0; word-break: break-all; }
+      .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+      .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+      .tabs button { height: 34px; border: 0; border-radius: 8px; padding: 0 12px; background: #eef2f0; color: #2f4a32; cursor: pointer; }
+      .tabs button.active { background: var(--green); color: #fff; }
+      .steps { margin: 0 0 14px; padding-left: 20px; color: #40445a; font-size: 13px; line-height: 1.7; }
+      .steps li { margin: 0; }
+      textarea {
+        width: 100%; min-height: 88px; border: 1px solid #d0d5dd; border-radius: 8px; padding: 10px;
+        resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;
       }
+      .tagrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+      .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef2f0; color: #2f4a32; font-size: 12px; }
+
+      /* —— 侧栏 —— */
+      .mask {
+        position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40;
+        opacity: 0; pointer-events: none; transition: opacity .2s;
+      }
+      .mask.on { opacity: 1; pointer-events: auto; }
+      .sidebar {
+        position: fixed; top: 0; left: 0; bottom: 0; width: min(78vw, 280px); z-index: 50;
+        background: var(--sidebar); color: #fff;
+        transform: translateX(-105%); transition: transform .22s ease;
+        padding: calc(12px + env(safe-area-inset-top, 0px)) 0 16px;
+        display: flex; flex-direction: column;
+      }
+      .sidebar.on { transform: translateX(0); }
+      .sidebar .brand {
+        padding: 8px 20px 18px; font-size: 18px; font-weight: 700; letter-spacing: .02em;
+      }
+      .sidebar nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
+      .sidebar button.nav-item {
+        display: flex; align-items: center; gap: 12px; width: 100%;
+        border: 0; background: transparent; color: #e8eaed;
+        padding: 12px 14px; border-radius: 8px; font-size: 15px; text-align: left; cursor: pointer;
+      }
+      .sidebar button.nav-item svg {
+        width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7;
+        stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0;
+      }
+      .sidebar button.nav-item.active { background: var(--sidebar-active); color: #fff; }
+
+      /* —— 底栏 —— */
+      .bottomnav {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+        height: calc(var(--bottom-h) + env(safe-area-inset-bottom, 0px));
+        padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+        background: #fff; border-top: 1px solid var(--line);
+        display: flex; justify-content: space-around; align-items: flex-start;
+      }
+      .bottomnav button {
+        flex: 1; border: 0; background: transparent; color: #9aa0a6;
+        display: flex; flex-direction: column; align-items: center; gap: 3px;
+        font-size: 11px; padding: 4px 0 0; cursor: pointer;
+      }
+      .bottomnav button svg {
+        width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7;
+        stroke-linecap: round; stroke-linejoin: round;
+      }
+      .bottomnav button.active { color: var(--green); font-weight: 600; }
+
+      .user-menu {
+        position: absolute; right: 10px; top: calc(var(--top-h) - 4px); z-index: 25;
+        background: #fff; border: 1px solid var(--line); border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12); min-width: 140px; display: none; overflow: hidden;
+      }
+      .user-menu.on { display: block; }
+      .user-menu button {
+        display: block; width: 100%; text-align: left; border: 0; background: #fff;
+        padding: 12px 14px; font-size: 14px; cursor: pointer;
+      }
+      .user-menu button:active { background: #f5f6f8; }
     </style>
   </head>
   <body>
-    <div class="wrap" id="loginWrap">
-      <form class="card login" id="loginForm" autocomplete="off" novalidate>
-        <h1>流量监测后台</h1>
-        <p class="hint">最高账号 <code>shuji888</code> / 管理员 <code>admin</code>，密码均为 <code>admin123@</code>。登录后可改当前账号。</p>
-        <div class="stack">
-          <div class="field">账号
-            <input id="user" name="username" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请输入账号" value="shuji888" />
-          </div>
-          <div class="field">密码
-            <input id="pw" name="password" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请输入密码，可直接粘贴" value="admin123@" />
-          </div>
+    <div class="login-wrap" id="loginWrap">
+      <form class="login-card" id="loginForm" autocomplete="off" novalidate>
+        <h1>运营后台</h1>
+        <p class="hint">刷量检测 · 最高账号 <code>shuji888</code> / 管理员 <code>admin</code></p>
+        <div class="field">账号
+          <input id="user" name="username" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请输入账号" value="shuji888" />
         </div>
-        <div class="row" style="margin-top:12px">
-          <button type="submit" id="go">登录</button>
-          <button type="button" class="ghost" id="fillOwner">填入最高账号</button>
-          <button type="button" class="ghost" id="fillAdmin">填入 admin</button>
-          <button type="button" class="ghost" id="pastePw">粘贴密码</button>
+        <div class="field">密码
+          <input id="pw" name="password" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请输入密码" value="admin123@" />
         </div>
-        <div class="row" style="margin-top:4px;margin-bottom:0">
-          <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer">
-            <input type="checkbox" id="hidePw" /> 隐藏密码
-          </label>
+        <button class="btn block" type="submit" id="go">登录</button>
+        <div class="login-actions" style="margin-top:10px">
+          <button type="button" class="btn ghost" id="fillOwner">最高账号</button>
+          <button type="button" class="btn ghost" id="fillAdmin">admin</button>
+          <button type="button" class="btn ghost" id="pastePw">粘贴密码</button>
         </div>
-        <p class="err" id="le" style="min-height:1.2em;margin:10px 0 0"></p>
-        <p class="okmsg" id="lm" style="min-height:1.2em;margin:4px 0 0"></p>
+        <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;margin-top:12px;cursor:pointer">
+          <input type="checkbox" id="hidePw" /> 隐藏密码
+        </label>
+        <p class="err" id="le"></p>
+        <p class="okmsg" id="lm"></p>
       </form>
     </div>
-    <div class="wrap" id="app" style="display:none"></div>
+
+    <div class="shell" id="shell">
+      <div class="mask" id="mask"></div>
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">运营后台</div>
+        <nav>
+          <button type="button" class="nav-item" data-view="overview">
+            <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 16l3-4 3 2 5-7"/></svg>
+            概览
+          </button>
+          <button type="button" class="nav-item" data-view="account">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 19c1.5-3.2 4-5 7-5s5.5 1.8 7 5"/></svg>
+            账号
+          </button>
+          <button type="button" class="nav-item" data-view="detect">
+            <svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h10"/></svg>
+            刷量检测
+          </button>
+          <button type="button" class="nav-item" data-view="outbound">
+            <svg viewBox="0 0 24 24"><rect x="4" y="5" width="12" height="12" rx="2"/><path d="M12 8h7v7M19 8l-7 7"/></svg>
+            出站点击
+          </button>
+        </nav>
+      </aside>
+
+      <header class="topbar">
+        <button type="button" class="icon-btn" id="menuBtn" aria-label="菜单">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div style="position:relative">
+          <button type="button" class="user-chip" id="userChip">
+            <span id="userChipName">admin</span>
+            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="user-menu" id="userMenu">
+            <button type="button" data-view="account">账号设置</button>
+            <button type="button" id="logoutBtn">退出登录</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="content" id="app"></main>
+
+      <nav class="bottomnav" id="bottomnav">
+        <button type="button" data-view="detect">
+          <svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h10"/></svg>
+          刷量检测
+        </button>
+        <button type="button" data-view="outbound">
+          <svg viewBox="0 0 24 24"><rect x="4" y="5" width="12" height="12" rx="2"/><path d="M12 8h7v7M19 8l-7 7"/></svg>
+          出站点击
+        </button>
+      </nav>
+    </div>
+
     <script>
       const $ = (s, el = document) => el.querySelector(s);
       const app = $("#app");
       const loginWrap = $("#loginWrap");
+      const shell = $("#shell");
+      const sidebar = $("#sidebar");
+      const mask = $("#mask");
       const ORIGIN = location.origin;
       let token = sessionStorage.getItem("probe-admin-token") || "";
       let username = sessionStorage.getItem("probe-admin-user") || "";
       let accountLabel = sessionStorage.getItem("probe-admin-label") || "";
       let isOwner = sessionStorage.getItem("probe-admin-owner") === "1";
       let state = {
+        view: sessionStorage.getItem("probe-admin-view") || "detect",
         from: day(0), to: day(0), kind: "", q: "", offset: 0, pack: null, err: "", ok: "", busy: false, learn: null,
         accountMsg: "", accountErr: "",
         siteType: sessionStorage.getItem("probe-site-type") || "html",
         siteName: sessionStorage.getItem("probe-site-name") || "",
+        menuOpen: false,
+        userMenuOpen: false,
       };
+
       function probeUrl() { return ORIGIN + "/probe.js"; }
       function escapeHtml(s) {
         return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -116,7 +315,6 @@
         const site = (state.siteName || "").trim();
         const siteAttr = site ? ` data-site="${site.replace(/"/g, "")}"` : "";
         const src = probeUrl();
-        // 注意：源码里必须写成 <\/script>，否则会截断本页 <script> 导致整页乱码
         if (type === "framework") {
           return [
             "<!-- 框架站（Vue / React / Next / Nuxt / uni-app H5 等）推荐写法 -->",
@@ -145,7 +343,6 @@
           `})();`,
         ].join("\n");
       }
-
       function day(off) {
         const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Hong_Kong", year: "numeric", month: "2-digit", day: "2-digit" });
         const p = Object.fromEntries(fmt.formatToParts(new Date()).map((x) => [x.type, x.value]));
@@ -154,6 +351,10 @@
       }
       function typeName(t) {
         return ({ page: "访问", click: "点击", leave: "离开", probe: "检测", "trap-close": "滑动通过" }[t] || t);
+      }
+      function monthStart() {
+        const d = day(0);
+        return d.slice(0, 8) + "01";
       }
       async function api(path, init) {
         const r = await fetch(path, {
@@ -178,6 +379,29 @@
           return ok;
         }
       }
+      function setMenu(open) {
+        state.menuOpen = !!open;
+        sidebar.classList.toggle("on", state.menuOpen);
+        mask.classList.toggle("on", state.menuOpen);
+      }
+      function setUserMenu(open) {
+        state.userMenuOpen = !!open;
+        $("#userMenu").classList.toggle("on", state.userMenuOpen);
+      }
+      function setView(view) {
+        state.view = view || "detect";
+        sessionStorage.setItem("probe-admin-view", state.view);
+        setMenu(false);
+        setUserMenu(false);
+        syncChrome();
+        render();
+      }
+      function syncChrome() {
+        const v = state.view;
+        sidebar.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-view") === v));
+        $("#bottomnav").querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-view") === v));
+        $("#userChipName").textContent = username || "admin";
+      }
       function showLogin(msg, ok) {
         token = "";
         username = "";
@@ -185,7 +409,7 @@
         sessionStorage.removeItem("probe-admin-user");
         sessionStorage.removeItem("probe-admin-label");
         sessionStorage.removeItem("probe-admin-owner");
-        app.style.display = "none";
+        shell.classList.remove("on");
         app.innerHTML = "";
         loginWrap.style.display = "";
         $("#le").textContent = msg && !ok ? msg : "";
@@ -194,14 +418,10 @@
         const pw = $("#pw");
         if (user && !user.value) user.value = "shuji888";
         if (pw && !pw.value) pw.value = "admin123@";
-        try { pw && pw.select(); } catch (_) {}
       }
-      function logout() {
-        showLogin("");
-      }
-      function loginView(msg, ok) {
-        showLogin(msg || "", !!ok);
-      }
+      function logout() { showLogin(""); }
+      function loginView(msg, ok) { showLogin(msg || "", !!ok); }
+
       async function doLogin(ev) {
         if (ev) ev.preventDefault();
         const user = $("#user");
@@ -222,7 +442,7 @@
           sessionStorage.setItem("probe-admin-label", accountLabel);
           sessionStorage.setItem("probe-admin-owner", isOwner ? "1" : "0");
           loginWrap.style.display = "none";
-          app.style.display = "";
+          shell.classList.add("on");
           load();
         } catch (e) {
           $("#le").textContent = e.message || "账号或密码错误";
@@ -231,63 +451,56 @@
       (function bindLogin() {
         const user = $("#user");
         const pw = $("#pw");
-        const form = $("#loginForm");
-        form.addEventListener("submit", doLogin);
+        $("#loginForm").addEventListener("submit", doLogin);
         $("#hidePw").onchange = (e) => { pw.type = e.target.checked ? "password" : "text"; };
         $("#fillOwner").onclick = () => {
-          user.value = "shuji888";
-          pw.value = "admin123@";
-          pw.focus();
-          $("#le").textContent = "";
-          $("#lm").textContent = "已填入最高账号，点登录即可";
+          user.value = "shuji888"; pw.value = "admin123@"; pw.focus();
+          $("#le").textContent = ""; $("#lm").textContent = "已填入最高账号";
         };
         $("#fillAdmin").onclick = () => {
-          user.value = "admin";
-          pw.value = "admin123@";
-          pw.focus();
-          $("#le").textContent = "";
-          $("#lm").textContent = "已填入管理员账号，点登录即可";
+          user.value = "admin"; pw.value = "admin123@"; pw.focus();
+          $("#le").textContent = ""; $("#lm").textContent = "已填入管理员账号";
         };
         $("#pastePw").onclick = async () => {
           try {
             if (navigator.clipboard && navigator.clipboard.readText) {
               const text = (await navigator.clipboard.readText()).trim();
               if (text) {
-                pw.value = text;
-                pw.dispatchEvent(new Event("input", { bubbles: true }));
-                pw.focus();
-                $("#lm").textContent = "已粘贴";
-                $("#le").textContent = "";
+                pw.value = text; pw.focus();
+                $("#lm").textContent = "已粘贴"; $("#le").textContent = "";
                 return;
               }
             }
           } catch (_) {}
-          $("#le").textContent = "粘贴失败：请点密码框后 Ctrl+V / 长按粘贴，或点「填入默认密码」";
+          $("#le").textContent = "粘贴失败：请点密码框后长按粘贴";
           pw.focus();
         };
       })();
+
+      $("#menuBtn").onclick = () => setMenu(!state.menuOpen);
+      mask.onclick = () => setMenu(false);
+      $("#userChip").onclick = (e) => { e.stopPropagation(); setUserMenu(!state.userMenuOpen); };
+      document.addEventListener("click", () => setUserMenu(false));
+      $("#userMenu").onclick = (e) => e.stopPropagation();
+      $("#logoutBtn").onclick = logout;
+      sidebar.querySelectorAll("[data-view]").forEach((b) => {
+        b.onclick = () => setView(b.getAttribute("data-view"));
+      });
+      $("#bottomnav").querySelectorAll("[data-view]").forEach((b) => {
+        b.onclick = () => setView(b.getAttribute("data-view"));
+      });
+      $("#userMenu").querySelector("[data-view]").onclick = () => setView("account");
+
       async function saveAccount() {
         const currentPassword = $("#curPw").value;
-        const newUsername = $("#newUser").value.trim();
+        const newUsername = ($("#newUser").value || "").trim();
         const newPassword = $("#newPw").value;
         const newPassword2 = $("#newPw2").value;
         state.accountErr = "";
         state.accountMsg = "";
-        if (!currentPassword) {
-          state.accountErr = "请填写当前密码";
-          render();
-          return;
-        }
-        if (!newUsername && !newPassword) {
-          state.accountErr = "请填写新账号或新密码";
-          render();
-          return;
-        }
-        if (newPassword && newPassword !== newPassword2) {
-          state.accountErr = "两次新密码不一致";
-          render();
-          return;
-        }
+        if (!currentPassword) { state.accountErr = "请填写当前密码"; render(); return; }
+        if (!newUsername && !newPassword) { state.accountErr = "请填写新账号或新密码"; render(); return; }
+        if (newPassword && newPassword !== newPassword2) { state.accountErr = "两次新密码不一致"; render(); return; }
         try {
           const d = await api("/api/admin/account", {
             method: "POST",
@@ -300,9 +513,10 @@
           render();
         }
       }
+
       async function load() {
         loginWrap.style.display = "none";
-        app.style.display = "";
+        shell.classList.add("on");
         state.busy = true;
         render();
         const p = new URLSearchParams({ from: state.from, to: state.to, kind: state.kind, q: state.q, offset: String(state.offset), limit: "80" });
@@ -351,144 +565,83 @@
         state.ok = "";
         load();
       }
-      function render() {
-        if (!token) return loginView();
-        loginWrap.style.display = "none";
-        app.style.display = "";
-        const s = (state.pack && state.pack.summary) || { realPv: 0, fakePv: 0, trap: 0, trapClose: 0, pv: 0, sources: [], refs: [], kinds: [] };
-        const items = (state.pack && state.pack.items) || [];
-        const total = (state.pack && state.pack.total) || 0;
+
+      function tops(arr) {
+        return (arr || []).length
+          ? arr.map((x) => `<li><button type="button" data-q="${String(x.name).replace(/"/g, "")}">${escapeHtml(x.name)}</button><em>${x.count}</em></li>`).join("")
+          : `<p class="hint">暂无</p>`;
+      }
+
+      function renderOverview(s, L, C, St) {
         const rate = s.pv ? Math.round((s.fakePv / s.pv) * 100) : 0;
-        const tops = (arr) =>
-          (arr || []).length
-            ? arr.map((x) => `<li><button type="button" data-q="${String(x.name).replace(/"/g, "")}">${x.name}</button><em>${x.count}</em></li>`).join("")
-            : `<p class="hint">暂无</p>`;
-        const L = state.learn || { counts: {}, stats: {}, thresholds: {} };
-        const C = L.counts || {};
-        const St = L.stats || {};
-        app.innerHTML = `
-          <div class="top">
-            <div>
-              <h1>流量监测后台 <span class="pill">probe-gate</span></h1>
-              <p class="hint" style="margin:6px 0 0">当前账号 <strong>${escapeHtml(username || "")}</strong> <span class="pill">${escapeHtml(accountLabel || (isOwner ? "最高账号" : "管理员"))}</span> · 滑动验证拦截假量 · 滑过记真量 · 自学习纠错</p>
-            </div>
-            <div class="row" style="margin:0">
-              <a class="ghost" href="/demo.html" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:8px;text-decoration:none;background:#eef2ff;color:#1e3a8a">打开演示页</a>
-              <button type="button" class="ghost" id="gotoInstall">脚本与安装</button>
-              <button type="button" class="ghost" id="gotoAccount">账号设置</button>
-              <button type="button" class="danger" id="logout">退出登录</button>
+        return `
+          <div class="card">
+            <h3>概览</h3>
+            <p class="hint">当前账号 <strong>${escapeHtml(username || "")}</strong>
+              <span class="pill">${escapeHtml(accountLabel || (isOwner ? "最高账号" : "管理员"))}</span>
+              · 区间 ${escapeHtml(state.from)} ~ ${escapeHtml(state.to)}</p>
+            <div class="stats">
+              <div class="stat"><span>真实 PV</span><strong>${s.realPv || 0}</strong><em>判定为真人</em></div>
+              <div class="stat"><span>假量 PV</span><strong>${s.fakePv || 0}</strong><em>占比 ${rate}%</em></div>
+              <div class="stat"><span>验证曝光</span><strong>${s.trap || 0}</strong><em>通过 ${s.trapClose || 0}</em></div>
+              <div class="stat"><span>拉黑 IP</span><strong>${C.ipBlock || 0}</strong><em>学习命中 ${St.learnedHits || 0}</em></div>
+              <div class="stat"><span>拉黑指纹</span><strong>${C.fpBlock || 0}</strong><em>观察 ${St.observes || 0}</em></div>
+              <div class="stat"><span>豁免条目</span><strong>${(C.ipAllow || 0) + (C.uaAllow || 0) + (C.fpAllow || 0)}</strong><em>真人/滑过</em></div>
             </div>
           </div>
+          <div class="card">
+            <h3>脚本安装</h3>
+            <p class="hint">把探测脚本挂到落地页后才有数据。脚本地址：<code>${escapeHtml(probeUrl())}</code></p>
+            <button type="button" class="btn" id="goDetectInstall">去刷量检测查看安装说明</button>
+          </div>`;
+      }
 
-          <div class="card" id="installCard">
-            <h3>脚本与安装说明</h3>
-            <p class="hint">按网站类型选择接入方式。真实用户无感；判定为假量才会出现滑动验证。脚本地址：<code>${escapeHtml(probeUrl())}</code></p>
-
-            <div class="row" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#606266">
-                站点名称（可选，写入后台明细）
-                <input id="siteName" type="text" autocomplete="off" spellcheck="false" placeholder="例如：官网 / 落地页A" value="${escapeHtml(state.siteName)}" style="width:220px;max-width:50vw" />
-              </label>
-            </div>
-
-            <div class="tabs" id="siteTypeTabs">
-              <button type="button" class="${state.siteType === "html" ? "active" : "ghost"}" data-type="html">HTML 网站</button>
-              <button type="button" class="${state.siteType === "framework" ? "active" : "ghost"}" data-type="framework">框架网站</button>
-            </div>
-
-            <div id="paneHtml" style="${state.siteType === "html" ? "" : "display:none"}">
-              <div class="tagrow">
-                <span class="pill">静态页</span>
-                <span class="pill">纯 HTML</span>
-                <span class="pill">WordPress / 建站后台可插脚本</span>
-              </div>
-              <ol class="steps">
-                <li>打开网站模板或页面源码，找到 <code>&lt;/body&gt;</code>。</li>
-                <li>把下面「嵌入脚本」整段粘贴到 <code>&lt;/body&gt;</code> 前一行并保存上线。</li>
-                <li>用手机/电脑打开目标站首页，再到本后台查询「今日 / 全部」确认有访问记录。</li>
-                <li>可选：填写上方站点名称，方便多站区分。</li>
-              </ol>
-              <h3>嵌入脚本</h3>
-              <div class="codebox">
-                <textarea id="embedHtml" readonly>${escapeHtml(buildEmbed("html"))}</textarea>
-              </div>
-              <div class="row" style="margin:10px 0 0">
-                <button type="button" id="copyEmbedHtml">复制 HTML 脚本</button>
-                <button type="button" class="ghost" id="copyProbeUrl1">复制脚本地址</button>
-                <span class="okmsg" id="copyTip1"></span>
-              </div>
-            </div>
-
-            <div id="paneFw" style="${state.siteType === "framework" ? "" : "display:none"}">
-              <div class="tagrow">
-                <span class="pill">Vue / React</span>
-                <span class="pill">Next / Nuxt</span>
-                <span class="pill">uni-app H5</span>
-                <span class="pill">其它 SPA</span>
-              </div>
-              <ol class="steps">
-                <li>优先改公共 HTML 壳：<code>index.html</code> / <code>public/index.html</code> / <code>app.html</code>，在 <code>&lt;/body&gt;</code> 前粘贴「方式一」。</li>
-                <li>若工程没有可改的 HTML（如部分 Next App Router），把「方式二」放到前端入口文件（如 <code>main.js</code>、<code>app.js</code>、<code>_app.tsx</code>、<code>layout.tsx</code> 的客户端副作用里）。</li>
-                <li>框架路由跳转一般无需再嵌；脚本会读当前路径 / Hash。后台、登录页路径已默认跳过（<code>data-skip</code>）。</li>
-                <li>上线后打开站点首页，再回本后台看是否出现访问明细。</li>
-              </ol>
-              <h3>方式一：HTML 壳嵌入</h3>
-              <div class="codebox">
-                <textarea id="embedFw" readonly>${escapeHtml(buildEmbed("framework"))}</textarea>
-              </div>
-              <div class="row" style="margin:10px 0 14px">
-                <button type="button" id="copyEmbedFw">复制方式一</button>
-                <span class="okmsg" id="copyTip2"></span>
-              </div>
-              <h3>方式二：入口 JS 动态挂载</h3>
-              <div class="codebox">
-                <textarea id="embedFwJs" readonly style="min-height:160px">${escapeHtml(buildFrameworkInject())}</textarea>
-              </div>
-              <div class="row" style="margin:10px 0 0">
-                <button type="button" id="copyEmbedFwJs">复制方式二</button>
-                <button type="button" class="ghost" id="copyProbeUrl2">复制脚本地址</button>
-                <span class="okmsg" id="copyTip3"></span>
-              </div>
-            </div>
-          </div>
-
-          <div class="card" id="accountCard">
-            <h3>账号设置</h3>
-            <p class="hint">当前为<strong>${escapeHtml(accountLabel || (isOwner ? "最高账号" : "管理员"))}</strong>${isOwner ? "（最高权限）" : ""}。此处只改当前登录账号；<code>admin</code> 与 <code>shuji888</code> 彼此独立。修改成功后需重新登录。密码至少 6 位。</p>
-            <div class="stack" style="max-width:420px">
+      function renderAccount() {
+        return `
+          <div class="card">
+            <h3>账号</h3>
+            <p class="hint">当前为<strong>${escapeHtml(accountLabel || (isOwner ? "最高账号" : "管理员"))}</strong>。此处只改当前登录账号；修改成功后需重新登录。</p>
+            <div class="stack-gap">
               <div class="field">当前密码（必填）
                 <input id="curPw" type="text" autocomplete="off" spellcheck="false" placeholder="当前密码" />
               </div>
-              <div class="field">新账号（可选，留空则不改）
+              <div class="field">新账号（可选）
                 <input id="newUser" type="text" autocomplete="off" spellcheck="false" placeholder="新账号，当前：${escapeHtml(username || "")}" />
               </div>
-              <div class="field">新密码（可选，留空则不改）
+              <div class="field">新密码（可选）
                 <input id="newPw" type="text" autocomplete="off" spellcheck="false" placeholder="新密码" />
               </div>
               <div class="field">确认新密码
                 <input id="newPw2" type="text" autocomplete="off" spellcheck="false" placeholder="再输入一次新密码" />
               </div>
             </div>
-            <div class="row" style="margin-top:12px;margin-bottom:0">
-              <button type="button" id="saveAccount">保存修改</button>
-              <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer">
-                <input type="checkbox" id="hideAccPw" /> 隐藏密码
-              </label>
-              ${state.accountMsg ? `<span class="okmsg">${state.accountMsg}</span>` : ""}
-              ${state.accountErr ? `<span class="err">${state.accountErr}</span>` : ""}
-            </div>
-          </div>
+            <button type="button" class="btn block" id="saveAccount">保存修改</button>
+            <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;margin-top:12px;cursor:pointer">
+              <input type="checkbox" id="hideAccPw" /> 隐藏密码
+            </label>
+            ${state.accountMsg ? `<p class="okmsg">${state.accountMsg}</p>` : ""}
+            ${state.accountErr ? `<p class="err">${state.accountErr}</p>` : ""}
+          </div>`;
+      }
 
-          <div class="card">
-            <div class="row">
+      function renderDetect(s, items, total, rate) {
+        return `
+          <div class="card filters">
+            <p class="hint">登录后可查看各账号站点的刷量检测记录。脚本：<code>${escapeHtml(probeUrl())}</code></p>
+            <div class="date-row">
               <input type="date" id="from" value="${state.from}" />
-              <span>—</span>
+              <span style="color:var(--muted)">—</span>
               <input type="date" id="to" value="${state.to}" />
-              <button class="ghost" data-p="today">今日</button>
-              <button class="ghost" data-p="yest">昨日</button>
-              <button class="ghost" data-p="week">近 7 天</button>
+            </div>
+            <div class="quick">
+              <button type="button" data-p="today">今日</button>
+              <button type="button" data-p="yest">昨日</button>
+              <button type="button" data-p="week">近 7 天</button>
+              <button type="button" data-p="month">本月</button>
+            </div>
+            <div class="stack-gap">
               <select id="kind">
-                <option value=""${state.kind === "" ? " selected" : ""}>全部</option>
+                <option value=""${state.kind === "" ? " selected" : ""}>全部判定</option>
                 <option value="fake"${state.kind === "fake" ? " selected" : ""}>假量</option>
                 <option value="human"${state.kind === "human" ? " selected" : ""}>真实用户</option>
                 <option value="crawler"${state.kind === "crawler" ? " selected" : ""}>爬虫</option>
@@ -498,84 +651,125 @@
                 <option value="emulator"${state.kind === "emulator" ? " selected" : ""}>模拟器/云手机</option>
                 <option value="learned"${state.kind === "learned" ? " selected" : ""}>智能学习</option>
               </select>
-              <button id="query">${state.busy ? "查询中…" : "查询"}</button>
+              <input id="q" type="search" value="${state.q.replace(/"/g, "&quot;")}" placeholder="搜来源、来路、IP、UA、指纹" />
             </div>
+            <button type="button" class="btn block" id="query">${state.busy ? "查询中…" : "查询"}</button>
+          </div>
+
+          <div class="card">
             <div class="stats">
               <div class="stat"><span>真实 PV</span><strong>${s.realPv || 0}</strong><em>判定为真人</em></div>
-              <div class="stat"><span>假量 PV</span><strong>${s.fakePv || 0}</strong><em>含智能学习</em></div>
-              <div class="stat"><span>假量占比</span><strong>${rate}%</strong><em>假量 / 总 PV</em></div>
-              <div class="stat"><span>验证曝光</span><strong>${s.trap || 0}</strong><em>滑动验证出现</em></div>
-              <div class="stat"><span>验证通过</span><strong>${s.trapClose || 0}</strong><em>滑过=真量</em></div>
+              <div class="stat"><span>假量 PV</span><strong>${s.fakePv || 0}</strong><em>占比 ${rate}%</em></div>
+              <div class="stat"><span>验证曝光</span><strong>${s.trap || 0}</strong><em>通过 ${s.trapClose || 0}</em></div>
+            </div>
+          </div>
+
+          <div class="card" id="installCard">
+            <h3>脚本与安装</h3>
+            <div class="row" style="margin-bottom:10px">
+              <input id="siteName" type="text" autocomplete="off" spellcheck="false" placeholder="站点名称（可选）" value="${escapeHtml(state.siteName)}" style="flex:1;height:40px;border:1px solid #d0d5dd;border-radius:8px;padding:0 12px" />
+            </div>
+            <div class="tabs" id="siteTypeTabs">
+              <button type="button" class="${state.siteType === "html" ? "active" : ""}" data-type="html">HTML 网站</button>
+              <button type="button" class="${state.siteType === "framework" ? "active" : ""}" data-type="framework">框架网站</button>
+            </div>
+            <div id="paneHtml" style="${state.siteType === "html" ? "" : "display:none"}">
+              <ol class="steps">
+                <li>找到页面 <code>&lt;/body&gt;</code>，粘贴下方脚本并上线。</li>
+                <li>打开目标站后回本页查询「今日 / 近 7 天」确认有记录。</li>
+              </ol>
+              <textarea id="embedHtml" readonly>${escapeHtml(buildEmbed("html"))}</textarea>
+              <div class="row" style="margin:10px 0 0">
+                <button type="button" class="btn" id="copyEmbedHtml">复制脚本</button>
+                <span class="okmsg" id="copyTip1"></span>
+              </div>
+            </div>
+            <div id="paneFw" style="${state.siteType === "framework" ? "" : "display:none"}">
+              <ol class="steps">
+                <li>优先改公共 HTML 壳，在 <code>&lt;/body&gt;</code> 前粘贴方式一。</li>
+                <li>无 HTML 壳时，把方式二放到前端入口文件。</li>
+              </ol>
+              <h3>方式一</h3>
+              <textarea id="embedFw" readonly>${escapeHtml(buildEmbed("framework"))}</textarea>
+              <div class="row" style="margin:10px 0 14px">
+                <button type="button" class="btn" id="copyEmbedFw">复制方式一</button>
+                <span class="okmsg" id="copyTip2"></span>
+              </div>
+              <h3>方式二</h3>
+              <textarea id="embedFwJs" readonly style="min-height:140px">${escapeHtml(buildFrameworkInject())}</textarea>
+              <div class="row" style="margin:10px 0 0">
+                <button type="button" class="btn" id="copyEmbedFwJs">复制方式二</button>
+                <span class="okmsg" id="copyTip3"></span>
+              </div>
             </div>
           </div>
 
           <div class="card">
-            <h3>智能学习</h3>
-            <p class="hint">观察 ${St.observes || 0} · 学习命中 ${St.learnedHits || 0} · 自动拉黑 ${St.autoBlocks || 0} · 人工纠错 ${St.adminFeedback || 0} · 滑动通过 ${St.slidePass || 0}</p>
-            <div class="stats">
-              <div class="stat"><span>拉黑 IP</span><strong>${C.ipBlock || 0}</strong><em>累计 ${C.ips || 0}</em></div>
-              <div class="stat"><span>拉黑 UA</span><strong>${C.uaBlock || 0}</strong><em>累计 ${C.uas || 0}</em></div>
-              <div class="stat"><span>拉黑指纹</span><strong>${C.fpBlock || 0}</strong><em>累计 ${C.fps || 0}</em></div>
-              <div class="stat"><span>豁免条目</span><strong>${(C.ipAllow || 0) + (C.uaAllow || 0) + (C.fpAllow || 0)}</strong><em>真人/滑过</em></div>
-              <div class="stat"><span>晋升阈值</span><strong>${(L.thresholds && L.thresholds.FP_FAKE_PROMOTE) || 5}</strong><em>指纹假量次数</em></div>
-            </div>
-          </div>
-
-          <div class="card split">
-            <div><h3>来源</h3><ul>${tops(s.sources)}</ul></div>
-            <div><h3>来路流量</h3><ul>${tops(s.refs)}</ul></div>
-          </div>
-
-          <div class="card">
-            <div class="row">
-              <input id="q" value="${state.q.replace(/"/g, "&quot;")}" placeholder="搜来源、来路、IP、UA、指纹" style="flex:1" />
-              <button id="sq">搜索</button>
-            </div>
             <p class="hint">明细 ${total} 条${state.ok ? ` · <span class="okmsg">${state.ok}</span>` : ""}${state.err ? ` · <span class="err">${state.err}</span>` : ""}</p>
             <div class="table-wrap">
-            <table>
-              <thead><tr><th>时间</th><th>判定</th><th>来源</th><th>来路</th><th>页面</th><th>访客</th><th>纠错</th></tr></thead>
-              <tbody>
-                ${
-                  items.length
-                    ? items.map((ev, idx) => `<tr>
-                      <td>${ev.at || ""}<p class="sub">${typeName(ev.type)}</p></td>
-                      <td>${ev.kindName || (ev.fake ? "假量" : "真实用户")}<p class="sub">${ev.siteName || ""}${ev.learnReason ? " · " + ev.learnReason : ""}</p></td>
-                      <td>${ev.source || "直接访问"}</td>
-                      <td>${ev.refHost || "直接访问"}${ev.ref ? `<p class="sub">${ev.ref}</p>` : ""}</td>
-                      <td>${ev.pageName || ""}<p class="sub">${ev.page || ""}</p><p class="sub">${ev.label || ""}</p></td>
-                      <td>${ev.uid || "游客"}<p class="sub">${ev.ip || ""}</p><p class="sub">${ev.ua || ""}</p>${ev.fp ? `<p class="sub">fp:${ev.fp}</p>` : ""}</td>
-                      <td>
-                        <button type="button" class="ghost" data-mark="fake" data-i="${idx}">假量</button>
-                        <button type="button" class="ghost" data-mark="human" data-i="${idx}">真人</button>
-                      </td>
-                    </tr>`).join("")
-                    : `<tr><td colspan="7" class="hint">${state.busy ? "加载中…" : "暂无记录。请先把嵌入代码挂到网站，或打开演示页产生访问后再查询「全部 / 近 7 天」。"}</td></tr>`
-                }
-              </tbody>
-            </table>
+              <table>
+                <thead><tr><th>时间</th><th>判定</th><th>来源</th><th>来路</th><th>页面</th><th>访客</th><th>纠错</th></tr></thead>
+                <tbody>
+                  ${
+                    items.length
+                      ? items.map((ev, idx) => `<tr>
+                        <td>${escapeHtml(ev.at || "")}<p class="sub">${typeName(ev.type)}</p></td>
+                        <td>${escapeHtml(ev.kindName || (ev.fake ? "假量" : "真实用户"))}<p class="sub">${escapeHtml(ev.siteName || "")}${ev.learnReason ? " · " + escapeHtml(ev.learnReason) : ""}</p></td>
+                        <td>${escapeHtml(ev.source || "直接访问")}</td>
+                        <td>${escapeHtml(ev.refHost || "直接访问")}${ev.ref ? `<p class="sub">${escapeHtml(ev.ref)}</p>` : ""}</td>
+                        <td>${escapeHtml(ev.pageName || "")}<p class="sub">${escapeHtml(ev.page || "")}</p></td>
+                        <td>${escapeHtml(ev.uid || "游客")}<p class="sub">${escapeHtml(ev.ip || "")}</p><p class="sub">${escapeHtml(ev.ua || "")}</p>${ev.fp ? `<p class="sub">fp:${escapeHtml(ev.fp)}</p>` : ""}</td>
+                        <td>
+                          <button type="button" class="btn ghost" data-mark="fake" data-i="${idx}" style="height:32px;padding:0 10px;margin:0 0 6px">假量</button>
+                          <button type="button" class="btn ghost" data-mark="human" data-i="${idx}" style="height:32px;padding:0 10px">真人</button>
+                        </td>
+                      </tr>`).join("")
+                      : `<tr><td colspan="7" class="hint">${state.busy ? "加载中…" : "暂无记录。请先把嵌入代码挂到网站后再查询。"}</td></tr>`
+                  }
+                </tbody>
+              </table>
             </div>
             <div class="row" style="margin-top:12px;margin-bottom:0">
-              <button class="ghost" id="prev" ${state.offset <= 0 ? "disabled" : ""}>上一页</button>
-              <button class="ghost" id="next" ${state.offset + 80 >= total ? "disabled" : ""}>下一页</button>
+              <button class="btn ghost" id="prev" ${state.offset <= 0 ? "disabled" : ""}>上一页</button>
+              <button class="btn ghost" id="next" ${state.offset + 80 >= total ? "disabled" : ""}>下一页</button>
             </div>
           </div>`;
+      }
 
-        $("#logout").onclick = logout;
-        $("#gotoInstall").onclick = () => {
-          const el = $("#installCard");
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        };
-        $("#gotoAccount").onclick = () => {
-          const el = $("#accountCard");
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-          $("#curPw") && $("#curPw").focus();
-        };
-        $("#hideAccPw").onchange = (e) => {
-          const t = e.target.checked ? "password" : "text";
-          ["curPw", "newPw", "newPw2"].forEach((id) => { const el = $("#" + id); if (el) el.type = t; });
-        };
-        $("#saveAccount").onclick = saveAccount;
+      function renderOutbound(s) {
+        return `
+          <div class="card">
+            <h3>出站点击 / 来路</h3>
+            <p class="hint">按当前查询区间汇总来源与来路域名。点名称可筛到刷量检测明细。</p>
+            <div class="split">
+              <div><h3>来源</h3><ul class="list">${tops(s.sources)}</ul></div>
+              <div><h3>来路流量</h3><ul class="list">${tops(s.refs)}</ul></div>
+            </div>
+          </div>`;
+      }
+
+      function render() {
+        if (!token) return loginView();
+        loginWrap.style.display = "none";
+        shell.classList.add("on");
+        syncChrome();
+        const s = (state.pack && state.pack.summary) || { realPv: 0, fakePv: 0, trap: 0, trapClose: 0, pv: 0, sources: [], refs: [], kinds: [] };
+        const items = (state.pack && state.pack.items) || [];
+        const total = (state.pack && state.pack.total) || 0;
+        const rate = s.pv ? Math.round((s.fakePv / s.pv) * 100) : 0;
+        const L = state.learn || { counts: {}, stats: {}, thresholds: {} };
+        const C = L.counts || {};
+        const St = L.stats || {};
+
+        if (state.view === "overview") app.innerHTML = renderOverview(s, L, C, St);
+        else if (state.view === "account") app.innerHTML = renderAccount();
+        else if (state.view === "outbound") app.innerHTML = renderOutbound(s);
+        else app.innerHTML = renderDetect(s, items, total, rate);
+
+        bindPanel(items, total);
+      }
+
+      function bindPanel(items, total) {
         const tip = (id, text) => { const el = $("#" + id); if (el) el.textContent = text; };
         const bindCopy = (btnId, getText, tipId, okText) => {
           const btn = $("#" + btnId);
@@ -585,60 +779,70 @@
             tip(tipId, ok ? okText : "复制失败，请手动选中复制");
           };
         };
-        $("#siteName").onchange = (e) => {
-          state.siteName = e.target.value || "";
-          sessionStorage.setItem("probe-site-name", state.siteName);
-          render();
-          const el = $("#installCard");
-          if (el) el.scrollIntoView({ block: "nearest" });
-        };
-        $("#siteName").onkeydown = (e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            e.target.blur();
+
+        if ($("#goDetectInstall")) {
+          $("#goDetectInstall").onclick = () => setView("detect");
+        }
+        if ($("#saveAccount")) {
+          $("#hideAccPw").onchange = (e) => {
+            const t = e.target.checked ? "password" : "text";
+            ["curPw", "newPw", "newPw2"].forEach((id) => { const el = $("#" + id); if (el) el.type = t; });
+          };
+          $("#saveAccount").onclick = saveAccount;
+        }
+        if ($("#query")) {
+          $("#from").onchange = (e) => (state.from = e.target.value);
+          $("#to").onchange = (e) => (state.to = e.target.value);
+          $("#kind").onchange = (e) => apply({ kind: e.target.value });
+          $("#query").onclick = () => apply({
+            from: $("#from").value, to: $("#to").value, kind: $("#kind").value, q: $("#q").value, offset: 0,
+          });
+          app.querySelectorAll("[data-p]").forEach((b) => {
+            b.onclick = () => {
+              const k = b.getAttribute("data-p");
+              if (k === "today") apply({ from: day(0), to: day(0) });
+              if (k === "yest") apply({ from: day(-1), to: day(-1) });
+              if (k === "week") apply({ from: day(-6), to: day(0) });
+              if (k === "month") apply({ from: monthStart(), to: day(0) });
+            };
+          });
+          $("#q").onkeydown = (e) => e.key === "Enter" && apply({ q: $("#q").value });
+          $("#prev").onclick = () => apply({ offset: Math.max(0, state.offset - 80) });
+          $("#next").onclick = () => apply({ offset: state.offset + 80 });
+          app.querySelectorAll("[data-mark]").forEach((b) => {
+            b.onclick = () => {
+              const i = Number(b.getAttribute("data-i"));
+              const ev = items[i];
+              if (ev) mark(ev, b.getAttribute("data-mark"));
+            };
+          });
+          if ($("#siteName")) {
+            $("#siteName").onchange = (e) => {
+              state.siteName = e.target.value || "";
+              sessionStorage.setItem("probe-site-name", state.siteName);
+              render();
+            };
           }
-        };
-        app.querySelectorAll("#siteTypeTabs [data-type]").forEach((b) => {
-          b.onclick = () => {
-            state.siteType = b.getAttribute("data-type") || "html";
-            sessionStorage.setItem("probe-site-type", state.siteType);
-            render();
-            const el = $("#installCard");
-            if (el) el.scrollIntoView({ block: "nearest" });
-          };
-        });
-        bindCopy("copyEmbedHtml", () => buildEmbed("html"), "copyTip1", "已复制 HTML 脚本");
-        bindCopy("copyEmbedFw", () => buildEmbed("framework"), "copyTip2", "已复制方式一");
-        bindCopy("copyEmbedFwJs", () => buildFrameworkInject(), "copyTip3", "已复制方式二");
-        bindCopy("copyProbeUrl1", () => probeUrl(), "copyTip1", "已复制脚本地址");
-        bindCopy("copyProbeUrl2", () => probeUrl(), "copyTip3", "已复制脚本地址");
-        $("#from").onchange = (e) => (state.from = e.target.value);
-        $("#to").onchange = (e) => (state.to = e.target.value);
-        $("#kind").onchange = (e) => apply({ kind: e.target.value });
-        $("#query").onclick = () => apply({ from: $("#from").value, to: $("#to").value, offset: 0 });
-        app.querySelectorAll("[data-p]").forEach((b) => {
-          b.onclick = () => {
-            const k = b.getAttribute("data-p");
-            if (k === "today") apply({ from: day(0), to: day(0) });
-            if (k === "yest") apply({ from: day(-1), to: day(-1) });
-            if (k === "week") apply({ from: day(-6), to: day(0) });
-          };
-        });
+          app.querySelectorAll("#siteTypeTabs [data-type]").forEach((b) => {
+            b.onclick = () => {
+              state.siteType = b.getAttribute("data-type") || "html";
+              sessionStorage.setItem("probe-site-type", state.siteType);
+              render();
+            };
+          });
+          bindCopy("copyEmbedHtml", () => buildEmbed("html"), "copyTip1", "已复制");
+          bindCopy("copyEmbedFw", () => buildEmbed("framework"), "copyTip2", "已复制");
+          bindCopy("copyEmbedFwJs", () => buildFrameworkInject(), "copyTip3", "已复制");
+        }
         app.querySelectorAll("[data-q]").forEach((b) => {
-          b.onclick = () => apply({ q: b.getAttribute("data-q") });
-        });
-        $("#sq").onclick = () => apply({ q: $("#q").value });
-        $("#q").onkeydown = (e) => e.key === "Enter" && apply({ q: $("#q").value });
-        $("#prev").onclick = () => apply({ offset: Math.max(0, state.offset - 80) });
-        $("#next").onclick = () => apply({ offset: state.offset + 80 });
-        app.querySelectorAll("[data-mark]").forEach((b) => {
           b.onclick = () => {
-            const i = Number(b.getAttribute("data-i"));
-            const ev = items[i];
-            if (ev) mark(ev, b.getAttribute("data-mark"));
+            state.view = "detect";
+            sessionStorage.setItem("probe-admin-view", "detect");
+            apply({ q: b.getAttribute("data-q") });
           };
         });
       }
+
       if (!token) loginView();
       else load();
     </script>
