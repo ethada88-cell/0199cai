@@ -319,6 +319,27 @@
     }
 
 
+    /* 默认（新建公司）：纯客服，无内嵌官网底栏 */
+    body:not(.embed-app) #siteTabbar,
+    body:not(.embed-app) #siteEmbed,
+    body:not(.embed-app) #liuheTop,
+    body:not(.embed-app) #fabChat {
+      display: none !important;
+    }
+    body:not(.embed-app) {
+      --tabbar-h: 0px;
+    }
+    body:not(.embed-app) .phone-stage,
+    body:not(.embed-app) .stage-main,
+    body:not(.embed-app) .chat-shell {
+      height: 100%;
+      height: var(--app-h);
+    }
+    body:not(.embed-app) .chat-shell .card {
+      height: 100%;
+      border-radius: 0;
+    }
+
     /* 手机全屏：上主区 + 下导航，避免 absolute+safe-area 错位 */
     body.embed-app {
       background:#fff !important;
@@ -457,7 +478,7 @@
     }
   </style>
 </head>
-<body class="embed-app">
+<body>
    <div class="phone-stage" id="phoneStage">
   <div class="stage-main" id="stageMain">
   <header class="liuhe-top" id="liuheTop">
@@ -918,6 +939,49 @@
         requestAnimationFrame(go);
         setTimeout(go, 60);
         setTimeout(go, 400);
+      }
+      // WebView/iOS may freeze the page; on resume scroll geometry is stale and
+      // new agent messages land above the fold. Force pin + settle sticks.
+      let resumeStickTimer = null;
+      function resumeVisitorBottom(reason) {
+        if (!live || !msgs) return;
+        stickVisitorBottom(true);
+        if (resumeStickTimer) clearTimeout(resumeStickTimer);
+        const delays = [80, 280, 700, 1400];
+        let i = 0;
+        const step = () => {
+          stickVisitorBottom(true);
+          i += 1;
+          if (i < delays.length) resumeStickTimer = setTimeout(step, delays[i] - (delays[i - 1] || 0));
+        };
+        resumeStickTimer = setTimeout(step, delays[0]);
+        try {
+          if (msgs.style) {
+            const prev = msgs.style.transform;
+            msgs.style.transform = "translateZ(0)";
+            requestAnimationFrame(() => {
+              try { msgs.style.transform = prev || ""; } catch (_) {}
+            });
+          }
+        } catch (_) {}
+      }
+      let lastForegroundAt = 0;
+      async function onVisitorForeground(reason) {
+        if (!live) return;
+        const now = Date.now();
+        // focus/pageshow/visibility can fire in a burst after WebView thaw
+        if (now - lastForegroundAt < 600) {
+          resumeVisitorBottom(reason || "foreground");
+          return;
+        }
+        lastForegroundAt = now;
+        resumeVisitorBottom(reason || "foreground");
+        try { await pull(); } catch (_) {}
+        schedulePull();
+        try {
+          if (wsWanted && (!wsOk || !wsObj || wsObj.readyState > 1)) connectVisitorWs();
+        } catch (_) {}
+        markAgentMessagesRead("immediate");
       }
       function bindVisitorReading() {
         if (!msgs || msgs.dataset.readingBound) return;
@@ -1442,12 +1506,34 @@
         wsWanted = true;
         connectVisitorWs();
         schedulePull();
+        if (document.documentElement.dataset.ocsResumeBound) return;
+        document.documentElement.dataset.ocsResumeBound = "1";
         document.addEventListener("visibilitychange", () => {
           if (!live) return;
-          pull();
-          schedulePull();
-          if (!document.hidden) markAgentMessagesRead();
+          if (document.hidden) {
+            schedulePull();
+            return;
+          }
+          onVisitorForeground("visibility");
         });
+        // iOS/WebView often skip visibilitychange after freeze; pageshow/focus catch resume.
+        window.addEventListener("pageshow", (e) => {
+          if (!live) return;
+          if (e && e.persisted) onVisitorForeground("pageshow-bfcache");
+          else if (!document.hidden) onVisitorForeground("pageshow");
+        });
+        window.addEventListener("focus", () => {
+          if (!live || document.hidden) return;
+          onVisitorForeground("focus");
+        });
+        try {
+          if (window.visualViewport) {
+            window.visualViewport.addEventListener("resize", () => {
+              if (!live || document.hidden || !visitorPinned) return;
+              stickVisitorBottom(false);
+            });
+          }
+        } catch (_) {}
       }
       ["pointerdown", "touchstart", "click", "keydown"].forEach((evName) => {
         document.addEventListener(evName, unlockSound, { passive: true });
@@ -1866,11 +1952,49 @@
       // 底部导航 = 官网 tab；接待=客服页，其它项懒加载官网对应路由。
       // 内嵌官网 origin 来自加密配置，页面源码不写明文站点。
       (async function bindEmbedShell() {
-        document.body.classList.add("embed-app");
         const shell = document.getElementById("chatShell");
         const frame = document.getElementById("siteEmbed");
         const tabbar = document.getElementById("siteTabbar");
         const params = new URLSearchParams(location.search);
+        // 新建公司默认不套内嵌官网（跟原先纯客服页一样）。
+        // 仅公司开启 embed_site，或调试参数 ?embed_site=1 时启用。
+        let wantEmbed = false;
+        try {
+          if (params.get("embed_site") === "1" || params.get("embed_site") === "true") wantEmbed = true;
+          else if (params.get("embed_site") === "0" || params.get("embed_site") === "false") wantEmbed = false;
+          else {
+            let co = null;
+            if (window.__ocsEarlyCompany) {
+              try { co = await window.__ocsEarlyCompany; } catch (_) { co = null; }
+            }
+            if (!co) {
+              const m = (location.pathname || "").match(/\/c\/([a-z0-9-]+)\/?/i);
+              const slug = m ? m[1].toLowerCase() : "";
+              if (slug) {
+                const a = (params.get("a") || "").trim();
+                const r = await fetch("/v1/public/companies/" + encodeURIComponent(slug) + (a ? ("?a=" + encodeURIComponent(a)) : ""));
+                co = await r.json().catch(function () { return {}; });
+              }
+            }
+            wantEmbed = !!(co && co.embed_site);
+          }
+        } catch (_) { wantEmbed = false; }
+        if (!wantEmbed) {
+          try {
+            document.body.classList.remove("embed-app");
+            document.body.classList.remove("liuhe-on");
+            if (tabbar) tabbar.hidden = true;
+            if (frame) { frame.hidden = true; frame.removeAttribute("src"); frame.src = "about:blank"; }
+            const top = document.getElementById("liuheTop");
+            if (top) top.hidden = true;
+            if (shell) {
+              shell.classList.add("mode-chat");
+              shell.classList.remove("mode-site");
+            }
+          } catch (_) {}
+          return;
+        }
+        document.body.classList.add("embed-app");
         // 仅调试可用明文 embed_origin；正式走加密配置
         let siteOrigin = (params.get("embed_origin") || "").trim().replace(/\/$/, "");
         if (!siteOrigin && typeof window.__ocsDecryptSiteOrigin === "function") {
