@@ -26,6 +26,28 @@ let lagMs = 0;
 let startedAt = Date.now();
 let inFlight = 0;
 const MAX_INFLIGHT = 400;
+/** 同时转发到 Next 的二次监测上限，超出直接放行，避免 Next 被打满。 */
+let nextInFlight = 0;
+const MAX_NEXT_INFLIGHT = 40;
+/** Next 连续超时/失败时短暂熔断，只放行不评分，保护整机负载。 */
+let nextBackoffUntil = 0;
+let nextFaults = 0;
+
+function nextHealthy() {
+  return Date.now() >= nextBackoffUntil;
+}
+
+function noteNextOk() {
+  nextFaults = 0;
+}
+
+function noteNextFault() {
+  nextFaults += 1;
+  if (nextFaults >= 3) {
+    nextBackoffUntil = Date.now() + 8000;
+    nextFaults = 0;
+  }
+}
 
 function tickLag() {
   const t0 = Date.now();
@@ -102,9 +124,17 @@ function send(res, status, body, headers = CORS) {
 }
 
 function proxyToNext(req, res, bodyBuf) {
+  if (!nextHealthy() || nextInFlight >= MAX_NEXT_INFLIGHT) {
+    send(res, 200, allowBody());
+    return;
+  }
   const headers = { ...req.headers, host: `${NEXT_HOST}:${NEXT_PORT}` };
   delete headers["content-length"];
   if (bodyBuf) headers["content-length"] = String(bodyBuf.length);
+  nextInFlight += 1;
+  const done = () => {
+    nextInFlight = Math.max(0, nextInFlight - 1);
+  };
   const upstream = httpRequest(
     {
       host: NEXT_HOST,
@@ -112,19 +142,26 @@ function proxyToNext(req, res, bodyBuf) {
       path: req.url,
       method: req.method,
       headers,
-      timeout: 3500,
+      timeout: 1200,
     },
     (up) => {
-      const out = { ...up.headers, connection: "close" };
+      noteNextOk();
+      const out = { ...up.headers };
       res.writeHead(up.statusCode || 502, out);
+      up.on("end", done);
+      up.on("close", done);
       up.pipe(res);
     },
   );
   upstream.on("timeout", () => {
+    noteNextFault();
+    done();
     upstream.destroy();
     if (!res.headersSent) send(res, 200, allowBody());
   });
   upstream.on("error", () => {
+    noteNextFault();
+    done();
     if (!res.headersSent) send(res, 200, allowBody());
   });
   if (bodyBuf) upstream.end(bodyBuf);
@@ -140,7 +177,7 @@ async function handleCheck(req, res) {
     return;
   }
   const followUp = peekFollowUp(text);
-  if (!followUp || cold() || overloaded()) {
+  if (!followUp || cold() || overloaded() || !nextHealthy()) {
     send(res, 200, allowBody(peekAccount(text), peekSite(text)));
     return;
   }
@@ -178,6 +215,7 @@ const server = http.createServer(async (req, res) => {
           uptime: Math.floor((Date.now() - startedAt) / 1000),
           lagMs,
           inFlight,
+          nextOk: nextHealthy(),
           front: true,
         }),
       );
