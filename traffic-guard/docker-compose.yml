@@ -1,0 +1,70 @@
+name: traffic-guard
+
+x-tg-common: &tg-common
+  image: traffic-guard-traffic-guard:latest
+  build: .
+  restart: unless-stopped
+  mem_limit: 10g
+  memswap_limit: 10g
+  pids_limit: 4096
+  oom_score_adj: 500
+  security_opt:
+    - no-new-privileges:true
+  env_file:
+    - .env
+  volumes:
+    - /opt/server-slice/data/traffic-guard/sites:/app/data/sites
+    - /opt/server-slice/data/traffic-guard/accounts:/app/data/accounts
+    - /opt/server-slice/data/traffic-guard/clicks:/app/data/clicks
+    - /opt/server-slice/data/traffic-guard/cache:/app/data/cache
+  networks:
+    - tg_net
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "5"
+
+services:
+  # 检测热路径
+  traffic-guard:
+    <<: *tg-common
+    container_name: traffic-guard
+    cpus: 8.0
+    cpuset: "27-34"
+    environment:
+      TZ: Asia/Shanghai
+      TG_SKIP_WARM: "1"
+      TG_FRONT_PORT: "43127"
+      TG_NEXT_PORT: "43126"
+    ports:
+      - "127.0.0.1:43128:43127"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:43127/api/v1/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 2s
+      retries: 12
+      start_period: 50s
+
+  # 后台专用，不被检测洪峰拖死（直连 Next，不经 check 前置）
+  traffic-guard-admin:
+    <<: *tg-common
+    container_name: traffic-guard-admin
+    cpus: 4.0
+    cpuset: "35-38"
+    environment:
+      TZ: Asia/Shanghai
+    command: ["npx", "next", "start", "-H", "0.0.0.0", "-p", "43127"]
+    ports:
+      - "127.0.0.1:43129:43127"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:43127/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+networks:
+  tg_net:
+    name: traffic-guard_net
+    driver: bridge

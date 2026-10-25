@@ -1,0 +1,4 @@
+域名: https://llcj.mtekww.cn
+仅绑定: llcj.mtekww.cn（不含 mtekww.cn / www.mtekww.cn）
+后台: https://llcj.mtekww.cn/login
+账号: /root/traffic-guard-admin.txt
