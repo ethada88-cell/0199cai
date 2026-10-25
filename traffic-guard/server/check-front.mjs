@@ -2,10 +2,12 @@
  * 检测热路径前置：用原生 http 扛洪峰，避免 Next 单线程被首检/半开连接拖死。
  * - 首次 check：立刻 allow（本来就不记量）
  * - 二次监测：优先同步转 Next；忙时先回 allow，再排队异步记量（不丢假量/真实量）
+ * - 异步记量转发真实 IP/UA；超时不重投（防双计）；探活要求 Next 可达
  * - ping / OPTIONS 本进程处理；其它路径反代 Next
  */
 import http from "node:http";
 import { request as httpRequest } from "node:http";
+import { randomUUID } from "node:crypto";
 
 const FRONT_PORT = Number(process.env.TG_FRONT_PORT || 43127);
 const NEXT_PORT = Number(process.env.TG_NEXT_PORT || 43126);
@@ -18,6 +20,8 @@ const MAX_NEXT_INFLIGHT = 120;
 const MAX_QUEUE = 20_000;
 const NEXT_TIMEOUT_MS = 4000;
 const BACKOFF_MS = 2500;
+const NEXT_PROBE_MS = 2000;
+const NEXT_PROBE_TIMEOUT_MS = 800;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -26,12 +30,23 @@ const CORS = {
   "Content-Type": "application/json; charset=utf-8",
 };
 
+const CLIENT_HEADER_KEYS = [
+  "x-real-ip",
+  "x-forwarded-for",
+  "cf-connecting-ip",
+  "user-agent",
+  "referer",
+  "origin",
+  "x-forwarded-proto",
+];
+
 let lagMs = 0;
 let startedAt = Date.now();
 let inFlight = 0;
 let nextInFlight = 0;
 let nextBackoffUntil = 0;
 let nextFaults = 0;
+let nextReachable = false;
 let queued = 0;
 let queuedDropped = 0;
 let persistedAsync = 0;
@@ -43,6 +58,7 @@ function nextHealthy() {
 
 function noteNextOk() {
   nextFaults = 0;
+  nextReachable = true;
 }
 
 function noteNextFault() {
@@ -127,16 +143,47 @@ function send(res, status, body, headers = CORS) {
   res.end(body);
 }
 
-function postNext(path, bodyBuf, { timeoutMs = NEXT_TIMEOUT_MS, onDone } = {}) {
+function captureClientHeaders(req) {
+  const h = req.headers || {};
+  const out = {};
+  for (const k of CLIENT_HEADER_KEYS) {
+    const v = h[k];
+    if (v == null || v === "") continue;
+    out[k] = Array.isArray(v) ? v.join(", ") : String(v);
+  }
+  return out;
+}
+
+function newIdempotencyKey() {
+  return randomUUID();
+}
+
+/**
+ * 异步记量到 Next。
+ * retryable：仅「请求未真正送出」时可重试（忙/连接拒绝）；
+ * 一旦 body 已交给上游，或超时/已收到响应，不可再重投，避免双计。
+ */
+function postNext(path, bodyBuf, clientHeaders = {}, { timeoutMs = NEXT_TIMEOUT_MS, onDone } = {}) {
   if (!nextHealthy() || nextInFlight >= MAX_NEXT_INFLIGHT) {
-    onDone?.(new Error("next busy"));
+    onDone?.(Object.assign(new Error("next busy"), { retryable: true }));
     return;
   }
   nextInFlight += 1;
+  let retryable = true;
+  let settled = false;
   const finished = (err) => {
+    if (settled) return;
+    settled = true;
     nextInFlight = Math.max(0, nextInFlight - 1);
+    if (err) err.retryable = Boolean(err.retryable && retryable);
     onDone?.(err || null);
     pumpQueue();
+  };
+  const headers = {
+    ...clientHeaders,
+    "content-type": "text/plain;charset=UTF-8",
+    "content-length": String(bodyBuf.length),
+    connection: "keep-alive",
   };
   const upstream = httpRequest(
     {
@@ -144,19 +191,17 @@ function postNext(path, bodyBuf, { timeoutMs = NEXT_TIMEOUT_MS, onDone } = {}) {
       port: NEXT_PORT,
       path,
       method: "POST",
-      headers: {
-        "content-type": "text/plain;charset=UTF-8",
-        "content-length": String(bodyBuf.length),
-        connection: "keep-alive",
-      },
+      headers,
       timeout: timeoutMs,
     },
     (up) => {
+      // 已收到响应头：请求已被 Next 受理，不可再重投
+      retryable = false;
       up.resume();
       up.on("end", () => {
         if ((up.statusCode || 500) >= 500) {
           noteNextFault();
-          finished(new Error(`status ${up.statusCode}`));
+          finished(Object.assign(new Error(`status ${up.statusCode}`), { retryable: false }));
         } else {
           noteNextOk();
           finished(null);
@@ -164,28 +209,39 @@ function postNext(path, bodyBuf, { timeoutMs = NEXT_TIMEOUT_MS, onDone } = {}) {
       });
       up.on("error", (err) => {
         noteNextFault();
-        finished(err);
+        finished(Object.assign(err, { retryable: false }));
       });
     },
   );
   upstream.on("timeout", () => {
+    // 超时通常发生在 body 已送出之后，重投会双计
+    retryable = false;
     noteNextFault();
     upstream.destroy();
-    finished(new Error("timeout"));
+    finished(Object.assign(new Error("timeout"), { retryable: false }));
   });
   upstream.on("error", (err) => {
+    // 连接阶段失败可重试；若 body 已写出则不可
     noteNextFault();
-    finished(err);
+    const code = err && err.code;
+    const connectFail =
+      code === "ECONNREFUSED" || code === "ECONNRESET" || code === "ENOTFOUND" || code === "EHOSTUNREACH";
+    finished(Object.assign(err, { retryable: retryable && connectFail }));
   });
-  upstream.end(bodyBuf);
+  upstream.end(bodyBuf, () => {
+    // body 已交给内核/套接字：此后失败不再重投
+    retryable = false;
+  });
 }
 
-function enqueuePersist(path, text, tries = 0) {
+function enqueuePersist(path, text, clientHeaders = {}, tries = 0, idemKey = "") {
   if (persistQueue.length >= MAX_QUEUE) {
     persistQueue.shift();
     queuedDropped += 1;
   }
-  persistQueue.push({ path, text, tries });
+  const key = idemKey || newIdempotencyKey();
+  const headers = { ...clientHeaders, "x-tg-idempotency-key": key };
+  persistQueue.push({ path, text, headers, tries, idemKey: key });
   queued = persistQueue.length;
   pumpQueue();
 }
@@ -196,16 +252,18 @@ function pumpQueue() {
     const item = persistQueue.shift();
     queued = persistQueue.length;
     const body = Buffer.from(item.text);
-    postNext(item.path, body, {
+    postNext(item.path, body, item.headers || {}, {
       onDone: (err) => {
         if (!err) {
           persistedAsync += 1;
           return;
         }
-        // 失败有限次重试，避免死循环打爆队列
-        if ((item.tries || 0) < 6 && persistQueue.length < MAX_QUEUE) {
+        // 仅未送出时可重试；已送出/超时绝不重投（防双计）
+        if (err.retryable && (item.tries || 0) < 6 && persistQueue.length < MAX_QUEUE) {
           persistQueue.push({ ...item, tries: (item.tries || 0) + 1 });
           queued = persistQueue.length;
+        } else if (!err.retryable) {
+          // 已可能被 Next 处理：丢弃重试，靠 idempotency 兜底
         } else {
           queuedDropped += 1;
         }
@@ -218,18 +276,60 @@ setInterval(() => {
   if (persistQueue.length) pumpQueue();
 }, 200).unref?.();
 
-function proxyToNext(req, res, bodyBuf, path = req.url || "/") {
+function probeNext() {
+  const req = httpRequest(
+    {
+      host: NEXT_HOST,
+      port: NEXT_PORT,
+      path: "/api/v1/ping",
+      method: "GET",
+      timeout: NEXT_PROBE_TIMEOUT_MS,
+    },
+    (up) => {
+      up.resume();
+      up.on("end", () => {
+        if ((up.statusCode || 500) < 500) {
+          nextReachable = true;
+          noteNextOk();
+        } else {
+          nextReachable = false;
+          noteNextFault();
+        }
+      });
+      up.on("error", () => {
+        nextReachable = false;
+      });
+    },
+  );
+  req.on("timeout", () => {
+    nextReachable = false;
+    req.destroy();
+  });
+  req.on("error", () => {
+    nextReachable = false;
+  });
+  req.end();
+}
+probeNext();
+setInterval(probeNext, NEXT_PROBE_MS).unref?.();
+
+function proxyToNext(req, res, bodyBuf, path = req.url || "/", clientHeaders = null) {
+  const captured = clientHeaders || captureClientHeaders(req);
   if (!nextHealthy() || nextInFlight >= MAX_NEXT_INFLIGHT) {
-    // 同步通道忙：先放行，再异步记量
-    if (bodyBuf && path.startsWith("/api/v1/check")) enqueuePersist("/api/v1/check", bodyBuf.toString("utf8"));
-    else if (bodyBuf && path.startsWith("/api/v1/popup")) enqueuePersist("/api/v1/popup", bodyBuf.toString("utf8"));
+    // 同步通道忙：先放行，再异步记量（带客户端头 + 幂等键）
+    if (bodyBuf && path.startsWith("/api/v1/check")) {
+      enqueuePersist("/api/v1/check", bodyBuf.toString("utf8"), captured);
+    } else if (bodyBuf && path.startsWith("/api/v1/popup")) {
+      enqueuePersist("/api/v1/popup", bodyBuf.toString("utf8"), captured);
+    }
     send(res, 200, path.startsWith("/api/v1/popup") ? JSON.stringify({ ok: true }) : allowBody());
     return;
   }
-  const headers = { ...req.headers, host: `${NEXT_HOST}:${NEXT_PORT}` };
+  const headers = { ...req.headers, host: `${NEXT_HOST}:${NEXT_PORT}`, ...captured };
   delete headers["content-length"];
   if (bodyBuf) headers["content-length"] = String(bodyBuf.length);
   nextInFlight += 1;
+  let requestSent = false;
   const done = () => {
     nextInFlight = Math.max(0, nextInFlight - 1);
     pumpQueue();
@@ -256,8 +356,7 @@ function proxyToNext(req, res, bodyBuf, path = req.url || "/") {
     done();
     upstream.destroy();
     if (!res.headersSent) {
-      if (bodyBuf && path.startsWith("/api/v1/check")) enqueuePersist("/api/v1/check", bodyBuf.toString("utf8"));
-      else if (bodyBuf && path.startsWith("/api/v1/popup")) enqueuePersist("/api/v1/popup", bodyBuf.toString("utf8"));
+      // 请求可能已送出：不再 enqueuePersist，避免超时双计
       send(res, 200, path.startsWith("/api/v1/popup") ? JSON.stringify({ ok: true }) : allowBody());
     }
   });
@@ -265,13 +364,23 @@ function proxyToNext(req, res, bodyBuf, path = req.url || "/") {
     noteNextFault();
     done();
     if (!res.headersSent) {
-      if (bodyBuf && path.startsWith("/api/v1/check")) enqueuePersist("/api/v1/check", bodyBuf.toString("utf8"));
-      else if (bodyBuf && path.startsWith("/api/v1/popup")) enqueuePersist("/api/v1/popup", bodyBuf.toString("utf8"));
+      // 仅连接未建立时才异步补记；已送出则不重投
+      if (!requestSent && bodyBuf && path.startsWith("/api/v1/check")) {
+        enqueuePersist("/api/v1/check", bodyBuf.toString("utf8"), captured);
+      } else if (!requestSent && bodyBuf && path.startsWith("/api/v1/popup")) {
+        enqueuePersist("/api/v1/popup", bodyBuf.toString("utf8"), captured);
+      }
       send(res, 200, path.startsWith("/api/v1/popup") ? JSON.stringify({ ok: true }) : allowBody());
     }
   });
-  if (bodyBuf) upstream.end(bodyBuf);
-  else req.pipe(upstream);
+  if (bodyBuf) {
+    upstream.end(bodyBuf, () => {
+      requestSent = true;
+    });
+  } else {
+    requestSent = true;
+    req.pipe(upstream);
+  }
 }
 
 async function handleCheck(req, res) {
@@ -283,6 +392,7 @@ async function handleCheck(req, res) {
     return;
   }
   const followUp = peekFollowUp(text);
+  const captured = captureClientHeaders(req);
   // 首次进站本来就不记量
   if (!followUp) {
     send(res, 200, allowBody(peekAccount(text), peekSite(text)));
@@ -290,10 +400,10 @@ async function handleCheck(req, res) {
   }
   // 能同步转发就同步（可弹窗）；忙/冷启动则先放行并排队记量，保证不漏数
   if (!cold() && !overloaded() && nextHealthy() && nextInFlight < MAX_NEXT_INFLIGHT) {
-    proxyToNext(req, res, Buffer.from(text), "/api/v1/check");
+    proxyToNext(req, res, Buffer.from(text), "/api/v1/check", captured);
     return;
   }
-  enqueuePersist("/api/v1/check", text);
+  enqueuePersist("/api/v1/check", text, captured);
   send(res, 200, allowBody(peekAccount(text), peekSite(text)));
 }
 
@@ -316,6 +426,7 @@ const server = http.createServer(async (req, res) => {
           inFlight,
           nextInFlight,
           nextOk: nextHealthy(),
+          nextReachable,
           queue: queued,
           queuedDropped,
           persistedAsync,
@@ -330,12 +441,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && (url === "/api/v1/popup" || url.startsWith("/api/v1/popup?"))) {
       const text = await readBody(req).catch(() => "");
+      const captured = captureClientHeaders(req);
       if (!cold() && !overloaded() && nextHealthy() && nextInFlight < MAX_NEXT_INFLIGHT) {
-        proxyToNext(req, res, Buffer.from(text || "{}"), "/api/v1/popup");
+        proxyToNext(req, res, Buffer.from(text || "{}"), "/api/v1/popup", captured);
         return;
       }
       // 滑动成功等上报也排队，避免过载丢「改真实」
-      if (text) enqueuePersist("/api/v1/popup", text);
+      if (text) enqueuePersist("/api/v1/popup", text, captured);
       send(res, 200, JSON.stringify({ ok: true }));
       return;
     }

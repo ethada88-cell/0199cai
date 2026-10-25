@@ -56,6 +56,8 @@ export function runCheck(input: {
   source?: unknown;
   persist?: boolean;
   followUp?: boolean;
+  /** 前置异步补记幂等键；合法 UUID 时作为事件 id */
+  id?: string;
 }): CheckResult {
   const siteKey = normalizeSiteKey(input.siteKey);
   if (!siteKey) throw new Error("invalid site");
@@ -200,9 +202,11 @@ export function runCheck(input: {
       direct,
     });
   }
+  const eventId =
+    typeof input.id === "string" && /^[0-9a-f-]{36}$/i.test(input.id) ? input.id : randomUUID();
   const result: CheckResult & { lab?: boolean; fp?: string } = {
     ok: true,
-    id: randomUUID(),
+    id: eventId,
     at: Date.now(),
     accountId: input.accountId,
     siteKey,

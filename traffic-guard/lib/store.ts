@@ -126,7 +126,8 @@ const STALE_PENDING_MS = 60 * 1000;
 let rebuildDepth = 0;
 
 function flushStalePending(account: string, key: string, list: StoredEvent[]) {
-  if (rebuildDepth > 0) return;
+  // 后台容器只读共享账本，禁止提交待确认 / 写 events。
+  if (isAdminReader() || rebuildDepth > 0) return;
   const cutoff = Date.now() - STALE_PENDING_MS;
   let changed = false;
   for (const event of list) {
@@ -142,7 +143,7 @@ function loadEvents(accountId: string, siteKey: string): StoredEvent[] {
   const { account, key, cacheKey, file } = locate(accountId, siteKey);
   const cached = cache.get(cacheKey);
   if (cached) {
-    flushStalePending(account, key, cached);
+    if (!isAdminReader()) flushStalePending(account, key, cached);
     return cached;
   }
   if (!existsSync(file)) {
@@ -161,11 +162,13 @@ function loadEvents(accountId: string, siteKey: string): StoredEvent[] {
     }
   }
   cache.set(cacheKey, events);
-  flushStalePending(account, key, events);
+  if (!isAdminReader()) flushStalePending(account, key, events);
   return events;
 }
 
 function persistEvents(accountId: string, siteKey: string) {
+  // 后台只读：绝不改写检测进程的 events.jsonl。
+  if (isAdminReader()) return;
   const { cacheKey, file } = locate(accountId, siteKey);
   const list = cache.get(cacheKey) || [];
   mkdirSync(path.dirname(file), { recursive: true });
@@ -173,6 +176,27 @@ function persistEvents(accountId: string, siteKey: string) {
   rollupMemory().delete(cacheKey);
   markSiteDirty(accountId, siteKey);
   invalidateReports();
+}
+
+/** 幂等去重：前置超时/重试可能带着同一 x-tg-idempotency-key 再来一次。 */
+const RECENT_ID_CAP = 50_000;
+function recentIds() {
+  return tgSet<string>("recentEventIds");
+}
+function rememberEventId(id: string) {
+  if (!id) return false;
+  const set = recentIds();
+  if (set.has(id)) return true;
+  set.add(id);
+  if (set.size > RECENT_ID_CAP) {
+    let drop = set.size - RECENT_ID_CAP;
+    for (const key of set) {
+      set.delete(key);
+      drop -= 1;
+      if (drop <= 0) break;
+    }
+  }
+  return false;
 }
 
 function isSoftSuspect(event: StoredEvent) {
@@ -438,6 +462,10 @@ function setDaysFlushTimer(timer: ReturnType<typeof setTimeout> | null) {
 }
 function flushDaysFiles() {
   setDaysFlushTimer(null);
+  if (isAdminReader()) {
+    daysFileDirty.clear();
+    return;
+  }
   // 小批量 + 让出事件循环，避免一次刷盘卡住 check/admin
   const batch = [...daysFileDirty].slice(0, 40);
   const start = Date.now();
@@ -513,9 +541,12 @@ function isReview(event: StoredEvent) {
 }
 
 export function addEvent(event: StoredEvent) {
+  if (isAdminReader()) return;
   const { account, key, cacheKey, file } = locate(event.accountId, event.siteKey);
   if (event.accountId !== account || event.siteKey !== key) return;
+  if (event.id && rememberEventId(event.id)) return;
   const list = loadEvents(account, key);
+  if (event.id && list.some((item) => item.id === event.id)) return;
   list.push(event);
   if (list.length > MAX) list.splice(0, list.length - MAX);
   cache.set(cacheKey, list);
@@ -528,6 +559,7 @@ export function addEvent(event: StoredEvent) {
 }
 
 export function recordVisit(event: StoredEvent, options?: { defer?: boolean; replaceReal?: boolean }) {
+  if (isAdminReader()) return;
   if (!normalizeAccountId(event.accountId)) return;
   if (event.lab) {
     if (isReview(event)) addEvent(event);
@@ -1689,11 +1721,14 @@ function loadRollup(accountId: string, siteKey: string): RollupFile {
     }
   }
   const built = buildRollup(accountId, siteKey, eventsMtimeMs);
-  try {
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(rollupFile, JSON.stringify(built));
-  } catch {
-    /* the page can still use the in-memory copy */
+  // 后台只读：内存重建 OK，禁止写共享 rollup.json。
+  if (!isAdminReader()) {
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(rollupFile, JSON.stringify(built));
+    } catch {
+      /* the page can still use the in-memory copy */
+    }
   }
   memory.set(cacheKey, built);
   return built;
@@ -2416,6 +2451,10 @@ const OVERVIEW_DISK_FLUSH_MS = 60_000;
 
 function flushOverviewDisk() {
   tgRun().overviewDiskWriteTimer = null;
+  if (isAdminReader()) {
+    tgRun().overviewDiskDirty = false;
+    return;
+  }
   const overviewDisk = tgRun().overviewDisk as OverviewDisk | null;
   if (!tgRun().overviewDiskDirty || !overviewDisk) return;
   tgRun().overviewDiskDirty = false;
@@ -2459,6 +2498,8 @@ function pruneOverviewDiskEntries(disk: OverviewDisk) {
 }
 
 function writeOverviewDisk(key: string, at: number, value: Bundle) {
+  // 后台只读共享 overview 缓存，避免与检测进程互相覆盖。
+  if (isAdminReader()) return;
   const disk = readOverviewDisk();
   disk.entries[key] = { at, value: compactBundle(value) };
   pruneOverviewDiskEntries(disk);
