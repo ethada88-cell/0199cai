@@ -12,6 +12,8 @@ import { noteSourceProbe } from "@/lib/source-probe";
 import { recordVisit } from "@/lib/store";
 import type { CheckResult, ClientSignals, Reason } from "@/lib/types";
 
+const IDEMPOTENCY_ID_RE = /^[0-9a-f-]{36}$/i;
+
 export function challengeFor(action: "allow" | "flag", _categories: string[]) {
   return action === "flag";
 }
@@ -202,8 +204,7 @@ export function runCheck(input: {
       direct,
     });
   }
-  const eventId =
-    typeof input.id === "string" && /^[0-9a-f-]{36}$/i.test(input.id) ? input.id : randomUUID();
+  const eventId = typeof input.id === "string" && IDEMPOTENCY_ID_RE.test(input.id) ? input.id : randomUUID();
   const result: CheckResult & { lab?: boolean; fp?: string } = {
     ok: true,
     id: eventId,

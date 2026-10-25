@@ -74,11 +74,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // 前置异步补记会带 x-tg-idempotency-key，避免超时重试双计。
-  const idemRaw = request.headers.get("x-tg-idempotency-key") || "";
-  const idem = /^[0-9a-f-]{36}$/i.test(idemRaw) ? idemRaw : undefined;
-
-  // 二次监测一律完整评分并落盘，不再因 cold/overload 直接丢数。
+  // 二次监测一律完整评分并落盘；前置异步补记的幂等键经 runCheck 校验后作为事件 id。
   const result = runCheck({
     ip: clientIp(request.headers),
     accountId: account.id,
@@ -88,7 +84,7 @@ export async function POST(request: Request) {
     source: body.source,
     persist: Boolean(siteKey),
     followUp: true,
-    id: idem,
+    id: request.headers.get("x-tg-idempotency-key") || undefined,
   });
   const { fp, ...publicResult } = result as typeof result & { fp?: string };
   void fp;

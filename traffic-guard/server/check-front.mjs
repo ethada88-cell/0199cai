@@ -6,7 +6,6 @@
  * - ping / OPTIONS 本进程处理；其它路径反代 Next
  */
 import http from "node:http";
-import { request as httpRequest } from "node:http";
 import { randomUUID } from "node:crypto";
 
 const FRONT_PORT = Number(process.env.TG_FRONT_PORT || 43127);
@@ -47,7 +46,6 @@ let nextInFlight = 0;
 let nextBackoffUntil = 0;
 let nextFaults = 0;
 let nextReachable = false;
-let queued = 0;
 let queuedDropped = 0;
 let persistedAsync = 0;
 const persistQueue = [];
@@ -84,6 +82,10 @@ function overloaded() {
 
 function cold() {
   return (Date.now() - startedAt) / 1000 < COLD_SEC;
+}
+
+function canSyncNext() {
+  return !cold() && !overloaded() && nextHealthy() && nextInFlight < MAX_NEXT_INFLIGHT;
 }
 
 function allowBody(accountId = "", siteKey = "") {
@@ -154,8 +156,10 @@ function captureClientHeaders(req) {
   return out;
 }
 
-function newIdempotencyKey() {
-  return randomUUID();
+function persistPath(path) {
+  if (path.startsWith("/api/v1/check")) return "/api/v1/check";
+  if (path.startsWith("/api/v1/popup")) return "/api/v1/popup";
+  return "";
 }
 
 /**
@@ -185,7 +189,7 @@ function postNext(path, bodyBuf, clientHeaders = {}, { timeoutMs = NEXT_TIMEOUT_
     "content-length": String(bodyBuf.length),
     connection: "keep-alive",
   };
-  const upstream = httpRequest(
+  const upstream = http.request(
     {
       host: NEXT_HOST,
       port: NEXT_PORT,
@@ -195,7 +199,6 @@ function postNext(path, bodyBuf, clientHeaders = {}, { timeoutMs = NEXT_TIMEOUT_
       timeout: timeoutMs,
     },
     (up) => {
-      // 已收到响应头：请求已被 Next 受理，不可再重投
       retryable = false;
       up.resume();
       up.on("end", () => {
@@ -214,14 +217,12 @@ function postNext(path, bodyBuf, clientHeaders = {}, { timeoutMs = NEXT_TIMEOUT_
     },
   );
   upstream.on("timeout", () => {
-    // 超时通常发生在 body 已送出之后，重投会双计
     retryable = false;
     noteNextFault();
     upstream.destroy();
     finished(Object.assign(new Error("timeout"), { retryable: false }));
   });
   upstream.on("error", (err) => {
-    // 连接阶段失败可重试；若 body 已写出则不可
     noteNextFault();
     const code = err && err.code;
     const connectFail =
@@ -229,7 +230,6 @@ function postNext(path, bodyBuf, clientHeaders = {}, { timeoutMs = NEXT_TIMEOUT_
     finished(Object.assign(err, { retryable: retryable && connectFail }));
   });
   upstream.end(bodyBuf, () => {
-    // body 已交给内核/套接字：此后失败不再重投
     retryable = false;
   });
 }
@@ -239,10 +239,14 @@ function enqueuePersist(path, text, clientHeaders = {}, tries = 0, idemKey = "")
     persistQueue.shift();
     queuedDropped += 1;
   }
-  const key = idemKey || newIdempotencyKey();
-  const headers = { ...clientHeaders, "x-tg-idempotency-key": key };
-  persistQueue.push({ path, text, headers, tries, idemKey: key });
-  queued = persistQueue.length;
+  const key = idemKey || randomUUID();
+  persistQueue.push({
+    path,
+    text,
+    headers: { ...clientHeaders, "x-tg-idempotency-key": key },
+    tries,
+    idemKey: key,
+  });
   pumpQueue();
 }
 
@@ -250,21 +254,16 @@ function pumpQueue() {
   // 冷启动也要继续消化队列，否则会堆积后少记。
   while (persistQueue.length && nextHealthy() && nextInFlight < MAX_NEXT_INFLIGHT) {
     const item = persistQueue.shift();
-    queued = persistQueue.length;
-    const body = Buffer.from(item.text);
-    postNext(item.path, body, item.headers || {}, {
+    postNext(item.path, Buffer.from(item.text), item.headers || {}, {
       onDone: (err) => {
         if (!err) {
           persistedAsync += 1;
           return;
         }
-        // 仅未送出时可重试；已送出/超时绝不重投（防双计）
+        // 仅未送出时可重试；已送出/超时靠幂等键兜底，不再重投
         if (err.retryable && (item.tries || 0) < 6 && persistQueue.length < MAX_QUEUE) {
           persistQueue.push({ ...item, tries: (item.tries || 0) + 1 });
-          queued = persistQueue.length;
-        } else if (!err.retryable) {
-          // 已可能被 Next 处理：丢弃重试，靠 idempotency 兜底
-        } else {
+        } else if (err.retryable) {
           queuedDropped += 1;
         }
       },
@@ -277,7 +276,7 @@ setInterval(() => {
 }, 200).unref?.();
 
 function probeNext() {
-  const req = httpRequest(
+  const req = http.request(
     {
       host: NEXT_HOST,
       port: NEXT_PORT,
@@ -288,10 +287,8 @@ function probeNext() {
     (up) => {
       up.resume();
       up.on("end", () => {
-        if ((up.statusCode || 500) < 500) {
-          nextReachable = true;
-          noteNextOk();
-        } else {
+        if ((up.statusCode || 500) < 500) noteNextOk();
+        else {
           nextReachable = false;
           noteNextFault();
         }
@@ -315,14 +312,10 @@ setInterval(probeNext, NEXT_PROBE_MS).unref?.();
 
 function proxyToNext(req, res, bodyBuf, path = req.url || "/", clientHeaders = null) {
   const captured = clientHeaders || captureClientHeaders(req);
+  const persist = bodyBuf ? persistPath(path) : "";
   if (!nextHealthy() || nextInFlight >= MAX_NEXT_INFLIGHT) {
-    // 同步通道忙：先放行，再异步记量（带客户端头 + 幂等键）
-    if (bodyBuf && path.startsWith("/api/v1/check")) {
-      enqueuePersist("/api/v1/check", bodyBuf.toString("utf8"), captured);
-    } else if (bodyBuf && path.startsWith("/api/v1/popup")) {
-      enqueuePersist("/api/v1/popup", bodyBuf.toString("utf8"), captured);
-    }
-    send(res, 200, path.startsWith("/api/v1/popup") ? JSON.stringify({ ok: true }) : allowBody());
+    if (persist) enqueuePersist(persist, bodyBuf.toString("utf8"), captured);
+    send(res, 200, persist === "/api/v1/popup" ? JSON.stringify({ ok: true }) : allowBody());
     return;
   }
   const headers = { ...req.headers, host: `${NEXT_HOST}:${NEXT_PORT}`, ...captured };
@@ -330,11 +323,18 @@ function proxyToNext(req, res, bodyBuf, path = req.url || "/", clientHeaders = n
   if (bodyBuf) headers["content-length"] = String(bodyBuf.length);
   nextInFlight += 1;
   let requestSent = false;
+  let settled = false;
   const done = () => {
+    if (settled) return;
+    settled = true;
     nextInFlight = Math.max(0, nextInFlight - 1);
     pumpQueue();
   };
-  const upstream = httpRequest(
+  const softAllow = () => {
+    if (res.headersSent) return;
+    send(res, 200, persist === "/api/v1/popup" ? JSON.stringify({ ok: true }) : allowBody());
+  };
+  const upstream = http.request(
     {
       host: NEXT_HOST,
       port: NEXT_PORT,
@@ -355,23 +355,15 @@ function proxyToNext(req, res, bodyBuf, path = req.url || "/", clientHeaders = n
     noteNextFault();
     done();
     upstream.destroy();
-    if (!res.headersSent) {
-      // 请求可能已送出：不再 enqueuePersist，避免超时双计
-      send(res, 200, path.startsWith("/api/v1/popup") ? JSON.stringify({ ok: true }) : allowBody());
-    }
+    // 请求可能已送出：不再 enqueuePersist，避免超时双计
+    softAllow();
   });
   upstream.on("error", () => {
     noteNextFault();
     done();
-    if (!res.headersSent) {
-      // 仅连接未建立时才异步补记；已送出则不重投
-      if (!requestSent && bodyBuf && path.startsWith("/api/v1/check")) {
-        enqueuePersist("/api/v1/check", bodyBuf.toString("utf8"), captured);
-      } else if (!requestSent && bodyBuf && path.startsWith("/api/v1/popup")) {
-        enqueuePersist("/api/v1/popup", bodyBuf.toString("utf8"), captured);
-      }
-      send(res, 200, path.startsWith("/api/v1/popup") ? JSON.stringify({ ok: true }) : allowBody());
-    }
+    // 仅连接未建立时才异步补记
+    if (!requestSent && persist) enqueuePersist(persist, bodyBuf.toString("utf8"), captured);
+    softAllow();
   });
   if (bodyBuf) {
     upstream.end(bodyBuf, () => {
@@ -393,13 +385,11 @@ async function handleCheck(req, res) {
   }
   const followUp = peekFollowUp(text);
   const captured = captureClientHeaders(req);
-  // 首次进站本来就不记量
   if (!followUp) {
     send(res, 200, allowBody(peekAccount(text), peekSite(text)));
     return;
   }
-  // 能同步转发就同步（可弹窗）；忙/冷启动则先放行并排队记量，保证不漏数
-  if (!cold() && !overloaded() && nextHealthy() && nextInFlight < MAX_NEXT_INFLIGHT) {
+  if (canSyncNext()) {
     proxyToNext(req, res, Buffer.from(text), "/api/v1/check", captured);
     return;
   }
@@ -427,7 +417,7 @@ const server = http.createServer(async (req, res) => {
           nextInFlight,
           nextOk: nextHealthy(),
           nextReachable,
-          queue: queued,
+          queue: persistQueue.length,
           queuedDropped,
           persistedAsync,
           front: true,
@@ -442,11 +432,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && (url === "/api/v1/popup" || url.startsWith("/api/v1/popup?"))) {
       const text = await readBody(req).catch(() => "");
       const captured = captureClientHeaders(req);
-      if (!cold() && !overloaded() && nextHealthy() && nextInFlight < MAX_NEXT_INFLIGHT) {
+      if (canSyncNext()) {
         proxyToNext(req, res, Buffer.from(text || "{}"), "/api/v1/popup", captured);
         return;
       }
-      // 滑动成功等上报也排队，避免过载丢「改真实」
       if (text) enqueuePersist("/api/v1/popup", text, captured);
       send(res, 200, JSON.stringify({ ok: true }));
       return;

@@ -180,12 +180,9 @@ function persistEvents(accountId: string, siteKey: string) {
 
 /** 幂等去重：前置超时/重试可能带着同一 x-tg-idempotency-key 再来一次。 */
 const RECENT_ID_CAP = 50_000;
-function recentIds() {
-  return tgSet<string>("recentEventIds");
-}
-function rememberEventId(id: string) {
+function seenEventId(id: string) {
   if (!id) return false;
-  const set = recentIds();
+  const set = tgSet<string>("recentEventIds");
   if (set.has(id)) return true;
   set.add(id);
   if (set.size > RECENT_ID_CAP) {
@@ -544,8 +541,9 @@ export function addEvent(event: StoredEvent) {
   if (isAdminReader()) return;
   const { account, key, cacheKey, file } = locate(event.accountId, event.siteKey);
   if (event.accountId !== account || event.siteKey !== key) return;
-  if (event.id && rememberEventId(event.id)) return;
+  if (event.id && seenEventId(event.id)) return;
   const list = loadEvents(account, key);
+  // 进程重启后 recent set 为空，再扫一遍近期 events 防双计
   if (event.id && list.some((item) => item.id === event.id)) return;
   list.push(event);
   if (list.length > MAX) list.splice(0, list.length - MAX);
