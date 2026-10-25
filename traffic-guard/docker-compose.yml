@@ -54,6 +54,8 @@ services:
     cpuset: "35-38"
     environment:
       TZ: Asia/Shanghai
+      TG_ADMIN: "1"
+      TG_RELOAD_DISK: "1"
     command: ["npx", "next", "start", "-H", "0.0.0.0", "-p", "43127"]
     ports:
       - "127.0.0.1:43129:43127"

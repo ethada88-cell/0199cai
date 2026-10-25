@@ -17,6 +17,11 @@ const OVERVIEW_FULL_SCAN_MAX_SITES = 8_000;
 /** 后台站点列表只保留假量靠前的站；顶栏数字仍走 day-totals。 */
 const OVERVIEW_HEAD_CAP = 800;
 
+/** 后台容器只读检测进程落盘的账本；必须按 mtime 重读，否则页面数字会停住。 */
+function isAdminReader() {
+  return process.env.TG_ADMIN === "1" || process.env.TG_RELOAD_DISK === "1";
+}
+
 type SourceBucket = { fake: number; farm?: number; crawler?: number; other?: number; real?: number };
 type DayStat = {
   real?: number;
@@ -371,16 +376,37 @@ function scheduleRebuildDays(accountId: string, siteKey: string) {
   }, 25);
 }
 
+const daysFileMtime = tgMap<string, number>("daysFileMtime");
+
+function fileNewer(file: string, seenMtime: number) {
+  try {
+    if (!existsSync(file)) return false;
+    return statSync(file).mtimeMs > seenMtime;
+  } catch {
+    return false;
+  }
+}
+
 function loadDays(accountId: string, siteKey: string): DayFile {
   const { account, key, cacheKey, day } = locate(accountId, siteKey);
   const cached = daysCache.get(cacheKey);
-  if (cached) return cached;
+  if (cached && !(isAdminReader() && fileNewer(day, daysFileMtime.get(cacheKey) || 0))) {
+    return cached;
+  }
   if (existsSync(day)) {
     try {
+      const mtime = statSync(day).mtimeMs;
       const parsed = JSON.parse(readFileSync(day, "utf8")) as DayFile;
       const days = parsed && typeof parsed === "object" ? parsed : {};
+      // 后台只读：不要 fold/save，避免和检测进程互相覆盖。
+      if (isAdminReader()) {
+        daysCache.set(cacheKey, days);
+        daysFileMtime.set(cacheKey, mtime);
+        return days;
+      }
       const changed = foldSlidesIntoReal(days) || dropNonAdFake(days, key);
       daysCache.set(cacheKey, days);
+      daysFileMtime.set(cacheKey, mtime);
       if (changed) saveDays(accountId, siteKey);
       // 分类补齐改异步，禁止在 check 热路径同步 rebuildDays
       if (needsClass(days)) scheduleRebuildDays(accountId, siteKey);
@@ -395,8 +421,10 @@ function loadDays(accountId: string, siteKey: string): DayFile {
   // 无 days.json：先空账接待，后台再从 events 重建
   const empty: DayFile = {};
   daysCache.set(cacheKey, empty);
-  scheduleRebuildDays(accountId, siteKey);
-  flushStalePending(account, key, cache.get(cacheKey) || []);
+  if (!isAdminReader()) {
+    scheduleRebuildDays(accountId, siteKey);
+    flushStalePending(account, key, cache.get(cacheKey) || []);
+  }
   return empty;
 }
 
@@ -681,14 +709,19 @@ function scheduleAccountIpFlush() {
   setIpFlushTimer(setTimeout(flushAccountIpTotals, 800));
 }
 
+const accountIpTotalsMtime = tgMap<string, number>("accountIpTotalsMtime");
+
 function readAccountIpTotals(accountId: string): AccountIpFile | null {
   const account = normalizeAccountId(accountId);
   if (!account) return null;
-  const hit = accountIpTotalsMem.get(account);
-  if (hit) return hit;
   const file = ipTotalsFile(account);
-  if (!existsSync(file)) return null;
+  const hit = accountIpTotalsMem.get(account);
+  if (hit && !(isAdminReader() && fileNewer(file, accountIpTotalsMtime.get(account) || 0))) {
+    return hit;
+  }
+  if (!existsSync(file)) return hit || null;
   try {
+    const mtime = statSync(file).mtimeMs;
     const raw = JSON.parse(readFileSync(file, "utf8")) as unknown;
     const data: AccountIpFile = {};
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
@@ -702,9 +735,10 @@ function readAccountIpTotals(accountId: string): AccountIpFile | null {
       }
     }
     accountIpTotalsMem.set(account, data);
+    accountIpTotalsMtime.set(account, mtime);
     return data;
   } catch {
-    return null;
+    return hit || null;
   }
 }
 
@@ -821,6 +855,8 @@ function ensureAccountIpTotals(accountId: string) {
   const account = normalizeAccountId(accountId);
   if (!account) return;
   readAccountIpTotals(account);
+  // 后台只读盘上的 ip-totals，禁止再扫站重建。
+  if (isAdminReader()) return;
   if (accountIpRefsReady.has(account) || accountIpBuilding.has(account)) return;
   rebuildAccountIpTotals(account);
 }
@@ -867,15 +903,21 @@ function realIpMemory() {
   return g.__tgRealIps;
 }
 
+const realIpFileMtime = tgMap<string, number>("realIpFileMtime");
+
 function loadRealIps(accountId: string, siteKey: string): RealIpFile {
   const { cacheKey, dir } = locate(accountId, siteKey);
   const memory = realIpMemory();
-  const cached = memory.get(cacheKey);
-  if (cached) return cached;
   const file = path.join(dir, "real-ips.json");
+  const cached = memory.get(cacheKey);
+  if (cached && !(isAdminReader() && fileNewer(file, realIpFileMtime.get(cacheKey) || 0))) {
+    return cached;
+  }
   const days: RealIpFile = {};
+  let mtime = 0;
   if (existsSync(file)) {
     try {
+      mtime = statSync(file).mtimeMs;
       const raw = JSON.parse(readFileSync(file, "utf8")) as unknown;
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
         for (const [day, list] of Object.entries(raw as Record<string, unknown>)) {
@@ -898,6 +940,7 @@ function loadRealIps(accountId: string, siteKey: string): RealIpFile {
     }
   }
   memory.set(cacheKey, days);
+  if (mtime) realIpFileMtime.set(cacheKey, mtime);
   return days;
 }
 
@@ -1032,15 +1075,21 @@ function suspectIpMemory() {
   return g.__tgSuspectIps;
 }
 
+const suspectIpFileMtime = tgMap<string, number>("suspectIpFileMtime");
+
 function loadSuspectIps(accountId: string, siteKey: string): RealIpFile {
   const { cacheKey, dir } = locate(accountId, siteKey);
   const memory = suspectIpMemory();
-  const cached = memory.get(cacheKey);
-  if (cached) return cached;
   const file = path.join(dir, "suspect-ips.json");
+  const cached = memory.get(cacheKey);
+  if (cached && !(isAdminReader() && fileNewer(file, suspectIpFileMtime.get(cacheKey) || 0))) {
+    return cached;
+  }
   const days: RealIpFile = {};
+  let mtime = 0;
   if (existsSync(file)) {
     try {
+      mtime = statSync(file).mtimeMs;
       const raw = JSON.parse(readFileSync(file, "utf8")) as unknown;
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
         for (const [day, list] of Object.entries(raw as Record<string, unknown>)) {
@@ -1063,6 +1112,7 @@ function loadSuspectIps(accountId: string, siteKey: string): RealIpFile {
     }
   }
   memory.set(cacheKey, days);
+  if (mtime) suspectIpFileMtime.set(cacheKey, mtime);
   return days;
 }
 
@@ -2142,21 +2192,27 @@ function invalidateFastPv(_accountId?: string) {
   /* day-totals 本身就是实时源；保留钩子给 markSiteDirty */
 }
 
+const accountTotalsMtime = tgMap<string, number>("accountTotalsMtime");
+
 function readAccountTotals(accountId: string): AccountDayTotals | null {
   const account = normalizeAccountId(accountId);
   if (!account) return null;
-  const hit = accountTotalsMem.get(account);
-  if (hit) return hit;
   const file = totalsFile(account);
-  if (!existsSync(file)) return null;
+  const hit = accountTotalsMem.get(account);
+  if (hit && !(isAdminReader() && fileNewer(file, accountTotalsMtime.get(account) || 0))) {
+    return hit;
+  }
+  if (!existsSync(file)) return hit || null;
   try {
+    const mtime = statSync(file).mtimeMs;
     const parsed = JSON.parse(readFileSync(file, "utf8")) as AccountDayTotals;
     const data = parsed && typeof parsed === "object" ? parsed : {};
     accountTotalsMem.set(account, data);
+    accountTotalsMtime.set(account, mtime);
     accountTotalsReady.add(account);
     return data;
   } catch {
-    return null;
+    return hit || null;
   }
 }
 
@@ -2239,7 +2295,13 @@ function rebuildAccountTotals(accountId: string, force = false) {
 
 function ensureAccountTotals(accountId: string) {
   const account = normalizeAccountId(accountId);
-  if (!account || accountTotalsReady.has(account)) return;
+  if (!account) return;
+  // 后台每次按 mtime 重读 day-totals；不要因 Ready 标记跳过，也不要在后台全量扫站重建。
+  if (isAdminReader()) {
+    readAccountTotals(account);
+    return;
+  }
+  if (accountTotalsReady.has(account)) return;
   if (readAccountTotals(account)) return;
   rebuildAccountTotals(account);
 }
@@ -2442,7 +2504,8 @@ function buildBundle(accounts: { id: string; username: string }[], siteKey: stri
       if (dirtySites.has(siteId)) {
         dirtySites.delete(siteId);
         forgetHead(job.id, job.key);
-      } else {
+      } else if (!isAdminReader()) {
+        // 后台跨进程读盘，不用本进程 head 记忆（那是检测进程的增量缓存）。
         const saved = memory.get(headMemoKey(job.id, job.key, from, to, withRows));
         if (saved) {
           if (saved.head) add(saved.head);
@@ -2457,11 +2520,11 @@ function buildBundle(accounts: { id: string; username: string }[], siteKey: stri
         daysLive = false;
       }
       if (!daysLive && realIpsInRange(job.id, job.key, from, to) <= 0) {
-        rememberHead(job.id, job.key, from, to, null, withRows);
+        if (!isAdminReader()) rememberHead(job.id, job.key, from, to, null, withRows);
         continue;
       }
       const head = summarizeSite(job.id, job.username, job.key, from, to, withRows);
-      rememberHead(job.id, job.key, from, to, head, withRows);
+      if (!isAdminReader()) rememberHead(job.id, job.key, from, to, head, withRows);
       if (head) add(head);
     }
     return true;
@@ -2766,6 +2829,12 @@ function shouldRefreshSolo(accountId: string, settled: boolean, age: number) {
   const dirty = accountHasDirtySites(accountId);
   if (dirty) return true;
   if (!settled) return true;
+  // 后台不共享检测进程的脏站集合；用较短 TTL，配合 day-totals mtime 刷新顶栏。
+  if (isAdminReader()) {
+    const totalsPath = totalsFile(accountId);
+    if (fileNewer(totalsPath, accountTotalsMtime.get(normalizeAccountId(accountId) || "") || 0)) return true;
+    return age >= 20_000;
+  }
   const staleMs = isLargeAccount(accountId) ? BUNDLE_STALE_LARGE_MS : BUNDLE_STALE_MS;
   return age >= staleMs;
 }
