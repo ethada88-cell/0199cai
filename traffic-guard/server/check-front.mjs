@@ -37,6 +37,7 @@ const CLIENT_HEADER_KEYS = [
   "referer",
   "origin",
   "x-forwarded-proto",
+  "x-tg-idempotency-key",
 ];
 
 let lagMs = 0;
@@ -239,14 +240,13 @@ function enqueuePersist(path, text, clientHeaders = {}, tries = 0, idemKey = "")
     persistQueue.shift();
     queuedDropped += 1;
   }
-  const key = idemKey || randomUUID();
-  persistQueue.push({
-    path,
-    text,
-    headers: { ...clientHeaders, "x-tg-idempotency-key": key },
-    tries,
-    idemKey: key,
-  });
+  const incoming = clientHeaders["x-tg-idempotency-key"];
+  const key =
+    idemKey ||
+    (typeof incoming === "string" && /^[0-9a-f-]{36}$/i.test(incoming) ? incoming : "") ||
+    randomUUID();
+  const headers = { ...clientHeaders, "x-tg-idempotency-key": key };
+  persistQueue.push({ path, text, headers, tries, idemKey: key });
   pumpQueue();
 }
 
