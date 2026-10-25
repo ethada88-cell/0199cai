@@ -2829,11 +2829,12 @@ function shouldRefreshSolo(accountId: string, settled: boolean, age: number) {
   const dirty = accountHasDirtySites(accountId);
   if (dirty) return true;
   if (!settled) return true;
-  // 后台不共享检测进程的脏站集合；用较短 TTL，配合 day-totals mtime 刷新顶栏。
+  // 后台不共享检测进程的脏站集合；短 TTL + day-totals mtime，保证数字及时跟上。
   if (isAdminReader()) {
-    const totalsPath = totalsFile(accountId);
-    if (fileNewer(totalsPath, accountTotalsMtime.get(normalizeAccountId(accountId) || "") || 0)) return true;
-    return age >= 20_000;
+    const id = normalizeAccountId(accountId) || "";
+    const totalsPath = totalsFile(id);
+    if (fileNewer(totalsPath, accountTotalsMtime.get(id) || 0)) return true;
+    return age >= 8_000;
   }
   const staleMs = isLargeAccount(accountId) ? BUNDLE_STALE_LARGE_MS : BUNDLE_STALE_MS;
   return age >= staleMs;
