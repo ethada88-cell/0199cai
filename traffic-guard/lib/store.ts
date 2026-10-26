@@ -11,7 +11,11 @@ import { noteLearnFake, noteLearnHuman } from "@/lib/learn";
 import type { StoredEvent } from "@/lib/types";
 
 const ROOT = path.resolve(process.cwd(), "data", "accounts");
-const MAX = 2000;
+/**
+ * 热站假量/弹窗/IP 明细依赖 events 全量。
+ * 旧逻辑只留最近 2000 条：addEvent 虽 append，但随后 persistEvents 用截断内存重写文件，历史被抹掉。
+ * 现改为磁盘与内存都保留全量（按站一个 jsonl）。
+ */
 /** 超过此站点数量走增量扫 / 长 TTL 名单，避免 listSites 拖死事件循环。 */
 const OVERVIEW_FULL_SCAN_MAX_SITES = 8_000;
 /** 后台站点列表只保留假量靠前的站；顶栏数字仍走 day-totals。 */
@@ -153,9 +157,11 @@ function loadEvents(accountId: string, siteKey: string): StoredEvent[] {
     cache.set(cacheKey, empty);
     return empty;
   }
-  const lines = readFileSync(file, "utf8").trim().split("\n").filter(Boolean).slice(-MAX);
+  // 全量读取：截断会导致假量 IP / 弹窗明细对不上 days.json。
+  const lines = readFileSync(file, "utf8").split("\n");
   const events: StoredEvent[] = [];
   for (const line of lines) {
+    if (!line) continue;
     try {
       const event = JSON.parse(line) as StoredEvent;
       if (event.siteKey === key && event.accountId === account) events.push(event);
@@ -558,9 +564,9 @@ export function addEvent(event: StoredEvent) {
   // 进程重启后 recent set 为空，再扫一遍近期 events 防双计
   if (event.id && list.some((item) => item.id === event.id)) return;
   list.push(event);
-  if (list.length > MAX) list.splice(0, list.length - MAX);
   cache.set(cacheKey, list);
   mkdirSync(path.dirname(file), { recursive: true });
+  // 只追加，禁止再按条数截断重写，否则热站历史假量明细会丢。
   appendFileSync(file, JSON.stringify(event) + "\n");
   rollupMemory().delete(cacheKey);
   markSiteDirty(account, key);
