@@ -576,6 +576,7 @@
   var tucked = [];
 
   function tuckFrames() {
+    // 只禁点击，不隐藏：隐藏 iframe 会让 iOS Safari 底栏透出白底，不像系统地址栏毛玻璃。
     var frames = document.getElementsByTagName("iframe");
     for (var i = 0; i < frames.length; i += 1) {
       var frame = frames[i];
@@ -583,10 +584,8 @@
       frame.setAttribute("data-tg-tucked", "1");
       tucked.push({
         el: frame,
-        visibility: frame.style.visibility,
         pointerEvents: frame.style.pointerEvents
       });
-      frame.style.visibility = "hidden";
       frame.style.pointerEvents = "none";
     }
   }
@@ -594,7 +593,6 @@
   function restoreFrames() {
     for (var i = 0; i < tucked.length; i += 1) {
       var row = tucked[i];
-      row.el.style.visibility = row.visibility;
       row.el.style.pointerEvents = row.pointerEvents;
       try { row.el.removeAttribute("data-tg-tucked"); } catch (e) {}
     }
@@ -615,13 +613,23 @@
 
     var style = document.createElement("style");
     style.id = "tg-gate-style";
-    // 用 svh + safe-area，避免 iOS Safari 全屏 fixed 盖住底部工具栏 / Home 条。
-    style.textContent = "html[data-tg-gate='1'] iframe{display:none !important;visibility:hidden !important;pointer-events:none !important;}html[data-tg-gate='1'],html[data-tg-gate='1'] body{overscroll-behavior:none !important;}#tg-gate{position:fixed !important;top:0 !important;left:0 !important;right:auto !important;bottom:auto !important;z-index:2147483647 !important;display:flex !important;align-items:center !important;justify-content:center !important;box-sizing:border-box !important;width:100% !important;width:100vw !important;height:100% !important;height:100svh !important;max-height:100svh !important;margin:0 !important;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0) !important;border:0 !important;background:rgba(15,23,32,.55) !important;-webkit-transform:translateZ(0);transform:translateZ(0);}";
+    // 遮罩外壳透明；变暗层由 #tg-gate-dim 负责，并避开底部，留给 iOS Safari 地址栏毛玻璃透出页面。
+    style.textContent = [
+      "html[data-tg-gate='1'] iframe{pointer-events:none !important;}",
+      "html[data-tg-gate='1'],html[data-tg-gate='1'] body{overscroll-behavior:none !important;}",
+      "#tg-gate{position:fixed !important;top:0 !important;left:0 !important;right:auto !important;bottom:auto !important;z-index:2147483647 !important;display:flex !important;align-items:center !important;justify-content:center !important;box-sizing:border-box !important;width:100% !important;width:100vw !important;height:100% !important;height:100svh !important;max-height:100svh !important;margin:0 !important;padding:0 !important;border:0 !important;background:transparent !important;-webkit-transform:translateZ(0);transform:translateZ(0);}",
+      "#tg-gate-dim{position:absolute !important;left:0 !important;right:0 !important;top:0 !important;bottom:0 !important;background:rgba(15,23,32,.55) !important;pointer-events:none !important;}",
+      "#tg-gate > *:not(#tg-gate-dim){position:relative;z-index:1;}"
+    ].join("");
     var overlay = document.createElement("div");
     overlay.id = "tg-gate";
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", "访问确认");
+
+    var dim = document.createElement("div");
+    dim.id = "tg-gate-dim";
+    dim.setAttribute("aria-hidden", "true");
 
     var panel = document.createElement("div");
     panel.setAttribute("style", "width:min(360px,calc(100% - 32px));max-height:min(80svh,520px);overflow:auto;background:#fff;border-radius:8px;padding:28px 24px 22px;box-shadow:0 12px 40px rgba(0,0,0,.2);text-align:center;font-family:PingFang SC,Microsoft YaHei,sans-serif;flex-shrink:0;");
@@ -656,22 +664,48 @@
     panel.appendChild(title);
     panel.appendChild(desc);
     panel.appendChild(track);
+    overlay.appendChild(dim);
     overlay.appendChild(panel);
 
     function fitViewport() {
-      // 贴合 visualViewport：Safari 底栏展开时遮罩只盖可见区域，不压浏览器工具栏。
+      // 贴合 visualViewport，并在底部留出透明带，避免涂黑 Safari 地址栏后方。
       var vv = global.visualViewport;
-      if (!vv) return;
-      var top = Math.round(vv.offsetTop || 0);
-      var left = Math.round(vv.offsetLeft || 0);
-      var w = Math.max(1, Math.round(vv.width || global.innerWidth || 0));
-      var h = Math.max(1, Math.round(vv.height || global.innerHeight || 0));
+      var top = 0;
+      var left = 0;
+      var w = Math.max(1, Math.round((vv && vv.width) || global.innerWidth || 0));
+      var h = Math.max(1, Math.round((vv && vv.height) || global.innerHeight || 0));
+      if (vv) {
+        top = Math.round(vv.offsetTop || 0);
+        left = Math.round(vv.offsetLeft || 0);
+      }
+      // 预留底部透明带：iOS Safari 地址栏叠在页面上方，遮罩不能涂到那一带，否则毛玻璃透不出站内容。
+      var clearBottom = 0;
+      try {
+        var layoutH = Math.round((document.documentElement && document.documentElement.clientHeight) || global.innerHeight || 0);
+        if (layoutH > h) clearBottom = Math.min(72, layoutH - h);
+      } catch (eClear) {}
+      if (clearBottom < 12) {
+        try {
+          var gap = Math.round((global.innerHeight || 0) - h - top);
+          if (gap > 0) clearBottom = Math.min(72, Math.max(clearBottom, gap));
+        } catch (eGap) {}
+      }
+      var apple = false;
+      try {
+        var ua = String((global.navigator && global.navigator.userAgent) || "");
+        apple = /iPhone|iPad|iPod/i.test(ua) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
+      } catch (eApple) {}
+      if (apple && clearBottom < 52) clearBottom = 52;
+      var useH = Math.max(1, h - clearBottom);
       overlay.style.top = top + "px";
       overlay.style.left = left + "px";
       overlay.style.width = w + "px";
-      overlay.style.height = h + "px";
+      overlay.style.height = useH + "px";
       overlay.style.right = "auto";
       overlay.style.bottom = "auto";
+      overlay.style.background = "transparent";
+      overlay.style.padding = "0";
+      dim.style.bottom = "0";
     }
 
     function onViewportChange() {
