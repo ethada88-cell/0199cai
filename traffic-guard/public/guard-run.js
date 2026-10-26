@@ -51,14 +51,16 @@
     try {
       global.addEventListener("pageshow", function () { nukeGateDom(); });
     } catch (ePs) {}
-    // 旧脚本若仍在跑，短时间内反复清掉遮罩层
+    // 仅在仍看得到旧遮罩时清理，避免无意义改 style 干扰 Safari 底栏
     try {
       var sweeps = 0;
       var sweepTimer = global.setInterval(function () {
-        nukeGateDom();
+        if (document.getElementById("tg-gate") || document.getElementById("tg-gate-style") || document.getElementById("tg-gate-dim")) {
+          nukeGateDom();
+        }
         sweeps += 1;
-        if (sweeps >= 40) global.clearInterval(sweepTimer);
-      }, 200);
+        if (sweeps >= 10) global.clearInterval(sweepTimer);
+      }, 500);
     } catch (eSw) {}
   }
 
@@ -391,19 +393,28 @@
       lastTrail = now;
       trail.push({ x: event && event.clientX || 0, y: event && event.clientY || 0, t: now });
     }
-    document.addEventListener("pointermove", bump, true);
-    document.addEventListener("touchmove", bump, true);
+    // 必须 passive：非被动 touchmove/pointermove 会在「往上拉」时让 iOS Safari 底栏变成实心遮挡
+    var listenOpts = { capture: true, passive: true };
+    if (isAppleTouch()) {
+      // 苹果只听 scroll/click，不捕获 touchmove，避免一滑动就破坏毛玻璃
+      document.addEventListener("touchstart", function () {
+        behavior.pointer += 1;
+      }, listenOpts);
+    } else {
+      document.addEventListener("pointermove", bump, listenOpts);
+      document.addEventListener("touchmove", bump, listenOpts);
+    }
     document.addEventListener("keydown", function () {
       if (behavior.keys < 40) behavior.keys += 1;
-    }, true);
+    }, listenOpts);
     document.addEventListener("click", function () {
       if (clickAt.length < 12) clickAt.push(Date.now());
-    }, true);
+    }, listenOpts);
     window.addEventListener("scroll", function () {
       var y = 0;
       try { y = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0; } catch (e) {}
       if (y > behavior.scroll) behavior.scroll = y;
-    }, true);
+    }, listenOpts);
   }
 
   function canvasToken() {

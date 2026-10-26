@@ -45,7 +45,7 @@
       node.async = true;
       node.defer = true;
       // 版本 + 苹果端时间戳：强制绕过缓存的旧遮罩脚本
-      node.src = origin + "/guard-run.js?v=20261027k" + (apple ? "&ios=1&t=" + Date.now() : "");
+      node.src = origin + "/guard-run.js?v=20261027m" + (apple ? "&ios=1&t=" + Date.now() : "");
       try { node.setAttribute("fetchpriority", "low"); } catch (e) {}
       if (account) node.setAttribute("data-account", account);
       if (preview) node.setAttribute("data-preview", preview);
