@@ -623,11 +623,13 @@ function commitPending(account: string, key: string, event: StoredEvent) {
   if (event.challenge || event.popupShown || event.popupClosed) {
     event.popupShown = true;
   }
-  touchDay(account, key, shanghaiDay(event.at), (stat) => {
+  const day = shanghaiDay(event.at);
+  touchDay(account, key, day, (stat) => {
     addClass(stat, host, flags);
     if (event.popupShown) stat.popupShown += 1;
     if (event.popupClosed) stat.popupClosed += 1;
   });
+  rememberFakeIp(account, key, day, event.ip || "");
   // 确认假量后写入自我学习账本（来路 / 出口 / 设备），下次更容易抓到。
   noteLearnFake({ accountId: account, host, ip: event.ip || "", fp: event.fp || "" });
   event.pending = false;
@@ -653,16 +655,17 @@ export function markPopup(accountId: string, siteKey: string, id: string, kind: 
   return true;
 }
 
-/** 单站每天最多记住多少个真实/嫌疑 IP；顶满后新 IP 不再进该站名单。 */
+/** 单站每天最多记住多少个真实/嫌疑/假量 IP；顶满后新 IP 不再进该站名单。 */
 const REAL_IP_CAP = 100_000;
 type RealIpFile = Record<string, string[]>;
 /** 与 RealIpFile 并行的 Set 索引：热站 IP 可达数万，禁止每次 includes 扫全表。 */
 type RealIpSets = Map<string, Set<string>>;
-function ipSetMemory(kind: "real" | "suspect") {
-  const name = kind === "real" ? "realIpSets" : "suspectIpSets";
+type IpKind = "real" | "suspect" | "fake";
+function ipSetMemory(kind: IpKind) {
+  const name = kind === "real" ? "realIpSets" : kind === "suspect" ? "suspectIpSets" : "fakeIpSets";
   return tgMap<string, RealIpSets>(name);
 }
-function dayIpSet(kind: "real" | "suspect", cacheKey: string, day: string, list?: string[]) {
+function dayIpSet(kind: IpKind, cacheKey: string, day: string, list?: string[]) {
   const root = ipSetMemory(kind);
   let byDay = root.get(cacheKey);
   if (!byDay) {
@@ -676,7 +679,7 @@ function dayIpSet(kind: "real" | "suspect", cacheKey: string, day: string, list?
   }
   return set;
 }
-function dropDayIpSet(kind: "real" | "suspect", cacheKey: string, day: string) {
+function dropDayIpSet(kind: IpKind, cacheKey: string, day: string) {
   const byDay = ipSetMemory(kind).get(cacheKey);
   if (!byDay) return;
   byDay.delete(day);
@@ -684,13 +687,11 @@ function dropDayIpSet(kind: "real" | "suspect", cacheKey: string, day: string) {
 
 /**
  * 账号级 IP 引用账本（ip-totals.json / 内存引用计数）。
- * 顶栏「真实 IP / 嫌疑 IP」按站分别去重后再相加：同一 IP 进站1和站2算两次。
- * 此账本仍可用于其它内部合并，不再覆盖顶栏展示。
+ * 顶栏「真实 IP / 嫌疑 IP / IP假量」按站分别去重后再相加：同一 IP 进站1和站2算两次。
  */
-type IpKind = "real" | "suspect";
-type AccountIpDay = { real: number; suspect: number };
+type AccountIpDay = { real: number; suspect: number; fake: number };
 type AccountIpFile = Record<string, AccountIpDay>;
-type IpRefDay = { real: Map<string, number>; suspect: Map<string, number> };
+type IpRefDay = { real: Map<string, number>; suspect: Map<string, number>; fake: Map<string, number> };
 
 const accountIpTotalsMem = tgMap<string, AccountIpFile>("accountIpTotalsMem");
 const accountIpRefs = tgMap<string, Record<string, IpRefDay>>("accountIpRefs");
@@ -706,11 +707,15 @@ function ipTotalsFile(accountId: string) {
 }
 
 function emptyIpDay(): AccountIpDay {
-  return { real: 0, suspect: 0 };
+  return { real: 0, suspect: 0, fake: 0 };
 }
 
 function emptyIpRefs(): IpRefDay {
-  return { real: new Map(), suspect: new Map() };
+  return { real: new Map(), suspect: new Map(), fake: new Map() };
+}
+
+function ipBagOf(refs: IpRefDay, kind: IpKind) {
+  return kind === "real" ? refs.real : kind === "suspect" ? refs.suspect : refs.fake;
 }
 
 function ipFlushTimer() {
@@ -766,6 +771,7 @@ function readAccountIpTotals(accountId: string): AccountIpFile | null {
         data[day] = {
           real: Math.max(0, Number(rec.real) || 0),
           suspect: Math.max(0, Number(rec.suspect) || 0),
+          fake: Math.max(0, Number(rec.fake) || 0),
         };
       }
     }
@@ -786,10 +792,12 @@ function syncIpDayCount(account: string, day: string, refs: IpRefDay) {
   // 引用计数 = 该 IP 出现在多少个站；求和 =「各站分别去重再相加」（同 IP 进两站算两次）。
   let real = 0;
   let suspect = 0;
+  let fake = 0;
   for (const n of refs.real.values()) real += n;
   for (const n of refs.suspect.values()) suspect += n;
-  const next: AccountIpDay = { real, suspect };
-  if (!next.real && !next.suspect) delete file[day];
+  for (const n of refs.fake.values()) fake += n;
+  const next: AccountIpDay = { real, suspect, fake };
+  if (!next.real && !next.suspect && !next.fake) delete file[day];
   else file[day] = next;
   accountIpDirty.add(account);
   scheduleAccountIpFlush();
@@ -803,7 +811,7 @@ function applyAccountIpBump(account: string, day: string, kind: IpKind, ip: stri
   }
   const refs = refsByDay[day] || emptyIpRefs();
   refsByDay[day] = refs;
-  const bag = kind === "real" ? refs.real : refs.suspect;
+  const bag = ipBagOf(refs, kind);
   const prev = bag.get(ip) || 0;
   const next = prev + delta;
   if (next <= 0) bag.delete(ip);
@@ -834,7 +842,7 @@ function ingestSiteIpFile(refsByDay: Record<string, IpRefDay>, filePath: string,
       if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Array.isArray(list)) continue;
       const refs = refsByDay[day] || emptyIpRefs();
       refsByDay[day] = refs;
-      const bag = kind === "real" ? refs.real : refs.suspect;
+      const bag = ipBagOf(refs, kind);
       for (const ip of list) {
         if (typeof ip !== "string" || !ip) continue;
         bag.set(ip, (bag.get(ip) || 0) + 1);
@@ -860,6 +868,7 @@ function rebuildAccountIpTotals(accountId: string) {
       const dir = path.join(ROOT, account, "sites", sites[index]);
       ingestSiteIpFile(refsByDay, path.join(dir, "real-ips.json"), "real");
       ingestSiteIpFile(refsByDay, path.join(dir, "suspect-ips.json"), "suspect");
+      ingestSiteIpFile(refsByDay, path.join(dir, "fake-ips.json"), "fake");
     }
     if (index < sites.length) {
       setImmediate(step);
@@ -867,8 +876,14 @@ function rebuildAccountIpTotals(accountId: string) {
     }
     const totals: AccountIpFile = {};
     for (const [day, refs] of Object.entries(refsByDay)) {
-      if (!refs.real.size && !refs.suspect.size) continue;
-      totals[day] = { real: refs.real.size, suspect: refs.suspect.size };
+      let real = 0;
+      let suspect = 0;
+      let fake = 0;
+      for (const n of refs.real.values()) real += n;
+      for (const n of refs.suspect.values()) suspect += n;
+      for (const n of refs.fake.values()) fake += n;
+      if (!real && !suspect && !fake) continue;
+      totals[day] = { real, suspect, fake };
     }
     accountIpRefs.set(account, refsByDay);
     accountIpTotalsMem.set(account, totals);
@@ -901,11 +916,12 @@ function ensureAccountIpTotals(accountId: string) {
   rebuildAccountIpTotals(account);
 }
 
-/** 账号内 IP 并集（内部备用）。顶栏已改为各站相加，不再用此覆盖展示。 */
+/** 顶栏 IP：各站名单分别去重再相加（真实 / 嫌疑 / 假量）。 */
 function fastIpTotals(accounts: { id: string }[], from: string, to: string): Partial<BundleTotals> | null {
-  if (!accounts.length) return { realIps: 0, suspectIps: 0 };
+  if (!accounts.length) return { realIps: 0, suspectIps: 0, fakeIps: 0 };
   let realIps = 0;
   let suspectIps = 0;
+  let fakeIps = 0;
   let any = false;
   for (const account of accounts) {
     const id = normalizeAccountId(account.id);
@@ -917,6 +933,7 @@ function fastIpTotals(accounts: { id: string }[], from: string, to: string): Par
         if (day < from || day > to || !refs) continue;
         for (const n of refs.real.values()) realIps += n;
         for (const n of refs.suspect.values()) suspectIps += n;
+        for (const n of refs.fake.values()) fakeIps += n;
       }
       any = true;
       continue;
@@ -928,9 +945,10 @@ function fastIpTotals(accounts: { id: string }[], from: string, to: string): Par
       if (day < from || day > to || !tot) continue;
       realIps += tot.real || 0;
       suspectIps += tot.suspect || 0;
+      fakeIps += tot.fake || 0;
     }
   }
-  return any ? { realIps, suspectIps } : null;
+  return any ? { realIps, suspectIps, fakeIps } : null;
 }
 
 function realIpMemory() {
@@ -982,6 +1000,7 @@ function loadRealIps(accountId: string, siteKey: string): RealIpFile {
 
 const realIpFileDirty = tgSet<string>("realIpFileDirty");
 const suspectIpFileDirty = tgSet<string>("suspectIpFileDirty");
+const fakeIpFileDirty = tgSet<string>("fakeIpFileDirty");
 function ipFileFlushTimer() {
   return tgRun().ipFileFlushTimer as ReturnType<typeof setTimeout> | null;
 }
@@ -991,39 +1010,32 @@ function setIpFileFlushTimer(timer: ReturnType<typeof setTimeout> | null) {
 function flushIpFiles() {
   setIpFileFlushTimer(null);
   const start = Date.now();
-  const realBatch = [...realIpFileDirty].slice(0, 30);
-  for (const cacheKey of realBatch) {
-    realIpFileDirty.delete(cacheKey);
-    const slash = cacheKey.indexOf("/");
-    if (slash < 0) continue;
-    const accountId = cacheKey.slice(0, slash);
-    const siteKey = cacheKey.slice(slash + 1);
-    const { dir } = locate(accountId, siteKey);
-    try {
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(path.join(dir, "real-ips.json"), JSON.stringify(realIpMemory().get(cacheKey) || {}));
-    } catch {
-      realIpFileDirty.add(cacheKey);
+  const flushKind = (
+    dirty: Set<string>,
+    fileName: string,
+    memory: () => Map<string, RealIpFile>,
+  ) => {
+    const batch = [...dirty].slice(0, 30);
+    for (const cacheKey of batch) {
+      if (Date.now() - start > 12) break;
+      dirty.delete(cacheKey);
+      const slash = cacheKey.indexOf("/");
+      if (slash < 0) continue;
+      const accountId = cacheKey.slice(0, slash);
+      const siteKey = cacheKey.slice(slash + 1);
+      const { dir } = locate(accountId, siteKey);
+      try {
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(path.join(dir, fileName), JSON.stringify(memory().get(cacheKey) || {}));
+      } catch {
+        dirty.add(cacheKey);
+      }
     }
-    if (Date.now() - start > 12) break;
-  }
-  const susBatch = [...suspectIpFileDirty].slice(0, 30);
-  for (const cacheKey of susBatch) {
-    if (Date.now() - start > 12) break;
-    suspectIpFileDirty.delete(cacheKey);
-    const slash = cacheKey.indexOf("/");
-    if (slash < 0) continue;
-    const accountId = cacheKey.slice(0, slash);
-    const siteKey = cacheKey.slice(slash + 1);
-    const { dir } = locate(accountId, siteKey);
-    try {
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(path.join(dir, "suspect-ips.json"), JSON.stringify(suspectIpMemory().get(cacheKey) || {}));
-    } catch {
-      suspectIpFileDirty.add(cacheKey);
-    }
-  }
-  if (realIpFileDirty.size || suspectIpFileDirty.size) {
+  };
+  flushKind(realIpFileDirty, "real-ips.json", realIpMemory);
+  flushKind(suspectIpFileDirty, "suspect-ips.json", suspectIpMemory);
+  flushKind(fakeIpFileDirty, "fake-ips.json", fakeIpMemory);
+  if (realIpFileDirty.size || suspectIpFileDirty.size || fakeIpFileDirty.size) {
     setIpFileFlushTimer(setTimeout(flushIpFiles, 50));
   }
 }
@@ -1189,6 +1201,93 @@ function forgetSuspectIp(accountId: string, siteKey: string, day: string, ip: st
   suspectIpFileDirty.add(cacheKey);
   scheduleIpFileFlush();
   bumpAccountIp(accountId, day, "suspect", value, -1);
+  markSiteDirty(accountId, siteKey);
+}
+
+function fakeIpMemory() {
+  const g = storeGlobal as StoreGlobal & { __tgFakeIps?: Map<string, RealIpFile> };
+  if (!g.__tgFakeIps) g.__tgFakeIps = new Map();
+  return g.__tgFakeIps;
+}
+
+const fakeIpFileMtime = tgMap<string, number>("fakeIpFileMtime");
+
+function loadFakeIps(accountId: string, siteKey: string): RealIpFile {
+  const { cacheKey, dir } = locate(accountId, siteKey);
+  const memory = fakeIpMemory();
+  const file = path.join(dir, "fake-ips.json");
+  const cached = memory.get(cacheKey);
+  if (cached && !(isAdminReader() && fileNewer(file, fakeIpFileMtime.get(cacheKey) || 0))) {
+    return cached;
+  }
+  const days: RealIpFile = {};
+  let mtime = 0;
+  if (existsSync(file)) {
+    try {
+      mtime = statSync(file).mtimeMs;
+      const raw = JSON.parse(readFileSync(file, "utf8")) as unknown;
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        for (const [day, list] of Object.entries(raw as Record<string, unknown>)) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Array.isArray(list)) continue;
+          const ips: string[] = [];
+          const seen = new Set<string>();
+          for (const ip of list) {
+            if (typeof ip !== "string" || !ip || seen.has(ip) || ips.length >= REAL_IP_CAP) continue;
+            seen.add(ip);
+            ips.push(ip);
+          }
+          if (ips.length) {
+            days[day] = ips;
+            dayIpSet("fake", cacheKey, day, ips);
+          }
+        }
+      }
+    } catch {
+      /* a broken file starts empty */
+    }
+  }
+  memory.set(cacheKey, days);
+  if (mtime) fakeIpFileMtime.set(cacheKey, mtime);
+  return days;
+}
+
+function rememberFakeIp(accountId: string, siteKey: string, day: string, ip: string) {
+  const value = ip.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !value || value.length > 80 || /\s/.test(value)) return;
+  const { cacheKey } = locate(accountId, siteKey);
+  const days = loadFakeIps(accountId, siteKey);
+  const list = days[day] || [];
+  const set = dayIpSet("fake", cacheKey, day, list);
+  if (set.has(value) || list.length >= REAL_IP_CAP) return;
+  set.add(value);
+  days[day] = list.concat(value);
+  fakeIpMemory().set(cacheKey, days);
+  fakeIpFileDirty.add(cacheKey);
+  scheduleIpFileFlush();
+  bumpAccountIp(accountId, day, "fake", value, 1);
+  markSiteDirty(accountId, siteKey);
+}
+
+function forgetFakeIp(accountId: string, siteKey: string, day: string, ip: string) {
+  const value = ip.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !value) return;
+  const { cacheKey } = locate(accountId, siteKey);
+  const days = loadFakeIps(accountId, siteKey);
+  const list = days[day] || [];
+  const set = dayIpSet("fake", cacheKey, day, list);
+  if (!set.has(value)) return;
+  set.delete(value);
+  const at = list.indexOf(value);
+  if (at >= 0) list.splice(at, 1);
+  if (list.length) days[day] = list;
+  else {
+    delete days[day];
+    dropDayIpSet("fake", cacheKey, day);
+  }
+  fakeIpMemory().set(cacheKey, days);
+  fakeIpFileDirty.add(cacheKey);
+  scheduleIpFileFlush();
+  bumpAccountIp(accountId, day, "fake", value, -1);
   markSiteDirty(accountId, siteKey);
 }
 
@@ -2875,6 +2974,7 @@ function withLiveTotals(accounts: { id: string; username: string }[], from: stri
       // 不能只用 bundle 里未扫完的 heads，否则大账号会出现「PV 全量、IP 只扫到一小截」。
       realIps: ips?.realIps ?? bundle.totals.realIps,
       suspectIps: ips?.suspectIps ?? bundle.totals.suspectIps,
+      fakeIps: ips?.fakeIps ?? bundle.totals.fakeIps,
     },
   };
 }
