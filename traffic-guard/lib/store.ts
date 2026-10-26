@@ -837,14 +837,32 @@ function applyAccountIpBump(account: string, day: string, kind: IpKind, ip: stri
   syncIpDayCount(account, day, refs);
 }
 
+/** 引用账本重建期间：先把顶栏 ip-totals 跟上，避免与 day-totals.fakeIps 短暂分叉。 */
+function optimisticAccountIpDelta(account: string, day: string, kind: IpKind, delta: number) {
+  let file = accountIpTotalsMem.get(account);
+  if (!file) {
+    file = readAccountIpTotals(account) || {};
+    accountIpTotalsMem.set(account, file);
+  }
+  const cur = file[day] || emptyIpDay();
+  if (kind === "real") cur.real = Math.max(0, (cur.real || 0) + delta);
+  else if (kind === "suspect") cur.suspect = Math.max(0, (cur.suspect || 0) + delta);
+  else cur.fake = Math.max(0, (cur.fake || 0) + delta);
+  if (!cur.real && !cur.suspect && !cur.fake) delete file[day];
+  else file[day] = cur;
+  accountIpDirty.add(account);
+  scheduleAccountIpFlush();
+}
+
 function bumpAccountIp(accountId: string, day: string, kind: IpKind, ip: string, delta: number) {
   const account = normalizeAccountId(accountId);
   const value = ip.trim();
   if (!account || !/^\d{4}-\d{2}-\d{2}$/.test(day) || !value || value.length > 80 || /\s/.test(value)) return;
   if (delta !== 1 && delta !== -1) return;
   if (!accountIpRefsReady.has(account) || accountIpBuilding.has(account)) {
-    // 站点 real-ips/suspect-ips 已落盘；重建以文件为准，这里只记需要补扫。
+    // 站点名单会落盘；重建以文件为准。重建中先乐观更新顶栏，并尽快补扫。
     accountIpResync.add(account);
+    optimisticAccountIpDelta(account, day, kind, delta);
     ensureAccountIpTotals(account);
     return;
   }
@@ -903,21 +921,38 @@ function rebuildAccountIpTotals(accountId: string) {
       if (!real && !suspect && !fake) continue;
       totals[day] = { real, suspect, fake };
     }
+    // 重建收尾前把脏的站点 IP 名单刷盘，避免「内存已记、文件未写」被漏扫。
+    drainIpFiles(400);
+    const needResync = accountIpResync.has(account);
+    if (needResync) {
+      // 扫站期间乐观加上的顶栏数字先取较大值，等 2s 补扫再用文件校准。
+      const prev = accountIpTotalsMem.get(account) || {};
+      for (const [day, row] of Object.entries(prev)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !row) continue;
+        const scanned = totals[day] || emptyIpDay();
+        totals[day] = {
+          real: Math.max(scanned.real || 0, row.real || 0),
+          suspect: Math.max(scanned.suspect || 0, row.suspect || 0),
+          fake: Math.max(scanned.fake || 0, row.fake || 0),
+        };
+      }
+    }
     accountIpRefs.set(account, refsByDay);
     accountIpTotalsMem.set(account, totals);
     accountIpRefsReady.add(account);
     accountIpDirty.add(account);
     scheduleAccountIpFlush();
     accountIpBuilding.delete(account);
-    if (accountIpResync.has(account)) {
+    if (needResync) {
       accountIpResync.delete(account);
       const now = Date.now();
-      if (now - (accountIpResyncAt.get(account) || 0) >= 30_000) {
+      // 重启后大账号首扫可能与写入竞态；2s 后再扫一轮即可对齐，不必等 30s。
+      if (now - (accountIpResyncAt.get(account) || 0) >= 2_000) {
         accountIpResyncAt.set(account, now);
         setTimeout(() => {
           accountIpRefsReady.delete(account);
           rebuildAccountIpTotals(account);
-        }, 30_000);
+        }, 2_000);
       }
     }
   };
@@ -1060,6 +1095,20 @@ function flushIpFiles() {
 function scheduleIpFileFlush() {
   if (ipFileFlushTimer()) return;
   setIpFileFlushTimer(setTimeout(flushIpFiles, 1200));
+}
+
+/** 账号 IP 账本重建收尾时尽快刷盘，减少漏扫窗口。 */
+function drainIpFiles(maxMs = 400) {
+  const start = Date.now();
+  while (
+    (realIpFileDirty.size || suspectIpFileDirty.size || fakeIpFileDirty.size) &&
+    Date.now() - start < maxMs
+  ) {
+    flushIpFiles();
+  }
+  if (realIpFileDirty.size || suspectIpFileDirty.size || fakeIpFileDirty.size) {
+    scheduleIpFileFlush();
+  }
 }
 
 function rememberRealIp(accountId: string, siteKey: string, day: string, ip: string) {
@@ -3016,10 +3065,12 @@ export function liveDashboardTotals(accounts: { id: string }[], from: string, to
   for (const account of accounts) seedLiveAccount(account.id);
   const live = fastPvTotals(accounts, from, to);
   const ips = fastIpTotals(accounts, from, to);
-  const fakeIpsLive = live?.fakeIps || 0;
+  // IP假量口径：站内去重，汇总只相加（同 IP 进两站算两次），不做全库去重。
+  // day-totals 与 ip-totals 都是「各站去重后再相加」；取较大值避免重建窗口短暂偏低。
+  const fakeIpsLive = Math.max(live?.fakeIps || 0, ips?.fakeIps || 0);
   return {
     fake: live?.fake || 0,
-    fakeIps: fakeIpsLive > 0 ? fakeIpsLive : ips?.fakeIps || 0,
+    fakeIps: fakeIpsLive,
     realPv: live?.realPv || 0,
     realIps: ips?.realIps || 0,
     suspect: live?.suspect || 0,

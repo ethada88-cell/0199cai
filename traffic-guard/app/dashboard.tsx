@@ -506,7 +506,7 @@ export function Dashboard({
   const cards = [
     { label: "真实 IP", value: stats.realIps || 0, note: "各站分别记 IP 再相加。有广告来路需停留约 4 秒或有滑动/点击才记，口径靠拢百度统计；含嫌疑 IP", verdict: null as Verdict | null, list: false as false | "sites" | "visits", tag: "" },
     { label: "真实 PV", value: stats.realPv || 0, note: "正常打开或滑动成功各算一次，同一 IP 反复打开也累加", verdict: null as Verdict | null, list: false as false | "sites" | "visits", tag: "" },
-    { label: "IP假量", value: stats.fakeIps || 0, note: "广告商外部来路刷量 IP；每站各自去重后再相加，跨站相同 IP 分别计。点击看来路 / IP / 设备", verdict: "fake" as Verdict, list: "visits" as const, tag: "精准假量" },
+    { label: "IP假量", value: stats.fakeIps || 0, note: "广告商外部来路刷量 IP。站点内去重；汇总只相加、不再去重（同 IP 进两个站算两次）。点击看来路 / IP / 设备", verdict: "fake" as Verdict, list: "visits" as const, tag: "精准假量" },
     { label: "PV假量", value: stats.fake || 0, note: "广告商外部来路刷量次数。点击看来路 / IP / 设备", verdict: "fake" as Verdict, list: "visits" as const, tag: "" },
     { label: "嫌疑 IP", value: stats.suspectIps || 0, note: "软特征且无正常浏览。各站分别去重再相加；同一 IP 进多站分别计。已计入真实 IP。有正常浏览改真实；脚本态互动改假量", verdict: "suspect" as Verdict, list: false as false | "sites" | "visits", tag: "" },
     { label: "嫌疑 PV", value: stats.suspect || 0, note: "软特征且无正常浏览的访问次数。点击查看各站 / 来路 / IP / 设备", verdict: "suspect" as Verdict, list: false as false | "sites" | "visits", tag: "" },
@@ -762,7 +762,7 @@ export function Dashboard({
           <div className="min-w-0">
             <h2 className="font-medium text-[#222]">{realList ? "各站点 · 真实 IP / 假量 / 嫌疑" : siteDetail ? detailLabel : suspectDetail ? "嫌疑明细 · 来路域名 / IP / 设备" : fakeVisitDetail ? "假量明细 · 来路域名 / IP / 设备" : "刷量检测 · 来路域名 / IP / 设备"}</h2>
             {realList ? (
-              <p className="mt-1 text-xs text-[#666]">每个站点单独统计并记下自己的 IP。本站内去重，总览把各站相加；同一 IP 出现在两个站算两次。嫌疑是软特征且没有正常浏览的访问，已计入真实 IP；有正常浏览改真实，脚本态互动才弹窗判假量。点站点名、「IP假量」或「看来路」看来路、IP、设备明细。</p>
+              <p className="mt-1 text-xs text-[#666]">每个站点单独统计并记下自己的 IP。站点内去重，汇总只相加、不再做全库去重；同一 IP 出现在两个站算两次。嫌疑是软特征且没有正常浏览的访问，已计入真实 IP；有正常浏览改真实，脚本态互动才弹窗判假量。点站点名、「IP假量」或「看来路」看来路、IP、设备明细。</p>
             ) : siteDetail && suspectDetail ? (
               <p className="mt-1 text-xs text-[#666]">点站点名进入该站嫌疑明细，可看来路域名、IP、设备。这里是软特征且无正常浏览的访问；有正常浏览的已改真实，脚本态的已走假量。</p>
             ) : fakeVisitDetail && stats.siteKey === "*" ? (
@@ -907,7 +907,7 @@ export function Dashboard({
                 {realList ? (
                   <>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="没弹窗的访问和滑动成功的不同 IP，同一 IP 在这个站点只算一次">真实IP</th>
-                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="只在这个站内去重；同一 IP 去了别的站，别的站另算">IP假量</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="站点内去重；汇总只相加，同 IP 进别的站另算一次">IP假量</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="这个站点自己的假量访问次数">PV假量</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="软特征且无正常浏览，本站内去重；已计入真实 IP。有正常浏览改真实">嫌疑IP</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="这个站点自己的软特征访问次数">嫌疑PV</th>
@@ -919,7 +919,7 @@ export function Dashboard({
                   <>
                     {countLabel === "假量" ? null : <th className="px-4 py-2 text-right font-medium">{countLabel}</th>}
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="没弹窗的访问和滑动成功的不同 IP，同一 IP 在这个站点只算一次">真实IP</th>
-                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="只在这个站内去重；同一 IP 去了别的站，别的站另算">IP假量</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="站点内去重；汇总只相加，同 IP 进别的站另算一次">IP假量</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="这个站点自己的假量访问次数">PV假量</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="软特征且无正常浏览，本站内去重；已计入真实 IP。有正常浏览改真实">嫌疑IP</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="这个站点自己的软特征访问次数">嫌疑PV</th>
@@ -935,7 +935,7 @@ export function Dashboard({
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium">次数</th>
                     <th className="whitespace-nowrap px-4 py-2 font-medium" title="访客在页停留时长；同一 IP 多次合计">停留时间</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="这个站的真实 IP 总数">真实IP</th>
-                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="只在这个站内去重；同一 IP 去了别的站，别的站另算">IP假量</th>
+                    <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="站点内去重；汇总只相加，同 IP 进别的站另算一次">IP假量</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="这个站点自己的假量访问次数">PV假量</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="软特征且无正常浏览，本站内去重；已计入真实 IP。有正常浏览改真实">嫌疑IP</th>
                     <th className="whitespace-nowrap px-4 py-2 text-right font-medium" title="这个站点自己的软特征访问次数">嫌疑PV</th>
