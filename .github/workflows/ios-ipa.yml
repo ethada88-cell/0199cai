@@ -4,6 +4,12 @@
 name: Build iOS IPA
 
 on:
+  # Push to main also builds Seat0199 unsigned IPA (企业签用)
+  push:
+    branches: [main]
+    paths:
+      - "online-cs/deploy/mobile/ios/Seat0199/**"
+      - ".github/workflows/ios-ipa.yml"
   workflow_dispatch:
     inputs:
       app:
@@ -34,17 +40,26 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       apps: ${{ steps.set.outputs.apps }}
+      method: ${{ steps.set.outputs.method }}
     steps:
       - id: set
+        env:
+          INPUT_APP: ${{ inputs.app }}
+          INPUT_METHOD: ${{ inputs.export_method }}
         run: |
-          if [ "${{ inputs.app }}" = "both" ]; then
+          # push 事件没有 inputs → 默认打 seat0199 unsigned
+          APP="${INPUT_APP:-seat0199}"
+          METHOD="${INPUT_METHOD:-unsigned}"
+          if [ "$APP" = "both" ]; then
             echo 'apps=["app0199","seat0199"]' >> "$GITHUB_OUTPUT"
           else
-            echo 'apps=["${{ inputs.app }}"]' >> "$GITHUB_OUTPUT"
+            echo "apps=[\"$APP\"]" >> "$GITHUB_OUTPUT"
           fi
+          echo "method=$METHOD" >> "$GITHUB_OUTPUT"
+          echo "Resolved app=$APP method=$METHOD"
 
   ipa:
-    name: IPA ${{ matrix.app }} (${{ inputs.export_method }})
+    name: IPA ${{ matrix.app }} (${{ needs.prepare.outputs.method }})
     needs: prepare
     runs-on: macos-14
     strategy:
@@ -63,6 +78,7 @@ jobs:
           IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          WANTED_METHOD: ${{ needs.prepare.outputs.method }}
         run: |
           case "${{ matrix.app }}" in
             app0199)
@@ -83,7 +99,7 @@ jobs:
               ;;
           esac
 
-          METHOD="${{ inputs.export_method }}"
+          METHOD="${WANTED_METHOD:-unsigned}"
           # No Apple secrets → force unsigned (企业签). Avoids ad-hoc/re-run failures.
           if [ "$METHOD" != "unsigned" ]; then
             for k in IOS_CERTIFICATE_P12_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROVISION_PROFILE_BASE64 IOS_TEAM_ID KEYCHAIN_PASSWORD; do
@@ -206,7 +222,7 @@ jobs:
         if: steps.sel.outputs.method != 'unsigned'
         env:
           OUT: ${{ runner.temp }}/ExportOptions.plist
-          METHOD: ${{ inputs.export_method }}
+          METHOD: ${{ steps.sel.outputs.method }}
           TEAM: ${{ secrets.IOS_TEAM_ID }}
           BUNDLE: ${{ steps.sel.outputs.bundle }}
           PROFILE: ${{ env.PROVISION_NAME }}
