@@ -62,7 +62,17 @@ final class EntryViewController: UIViewController {
         super.viewDidAppear(animated)
         if let code = UserDefaults.standard.string(forKey: "seat0199.agent_code") {
             let n = ChatAPI.normalize(code)
-            if !n.isEmpty { openChat(code: n, animated: false) }
+            if !n.isEmpty { openChat(code: n, animated: false); return }
+        }
+        if let clip = UIPasteboard.general.string, !clip.isEmpty {
+            if let url = URL(string: clip), let code = ChatAPI.agentCode(from: url), !code.isEmpty {
+                openChat(code: code, animated: false)
+                return
+            }
+            let n = ChatAPI.normalize(clip)
+            if !n.isEmpty, seats.contains(where: { $0.code == n }) {
+                openChat(code: n, animated: false)
+            }
         }
     }
 

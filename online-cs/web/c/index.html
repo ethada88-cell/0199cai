@@ -13,6 +13,22 @@
         var agent = "";
         try { agent = (new URLSearchParams(location.search).get("a") || "").trim().toLowerCase(); } catch (e) {}
         if (!slug || !agent) return;
+        /* 手机点专属链接：进 App 下载/打开页，自动对应座席；?web=1 保留网页会话 */
+        try {
+          var qs = new URLSearchParams(location.search);
+          if (qs.get("web") === "1") { /* stay on H5 */ }
+          else {
+            var ua = navigator.userAgent || "";
+            var mobile = /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+            if (mobile) {
+              location.replace(
+                "/download/open.html?a=" + encodeURIComponent(agent) +
+                "&slug=" + encodeURIComponent(slug)
+              );
+              return;
+            }
+          }
+        } catch (e) {}
         var sidKey = "ocs_visitor_sid_" + slug + "_" + agent;
         var tokKey = "ocs_visitor_tok_" + slug + "_" + agent;
         var sid = "", tok = "";

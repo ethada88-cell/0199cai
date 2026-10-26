@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>打开 0199客服</title>
+  <style>
+    :root { color-scheme: light; font-family: "PingFang SC", "Noto Sans SC", sans-serif; }
+    body { margin: 0; min-height: 100vh; background: linear-gradient(180deg, #eff6ff 0%, #f8fafc 45%, #f1f5f9 100%); color: #0f172a; }
+    main { max-width: 440px; margin: 0 auto; padding: 40px 20px 48px; text-align: center; }
+    .brand { font-size: 28px; font-weight: 700; color: #1d4ed8; margin: 0 0 8px; }
+    .seat { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+    .code { font-size: 13px; color: #64748b; margin: 0 0 20px; word-break: break-all; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 16px; text-align: left; margin-bottom: 14px; }
+    .card p { margin: 0; font-size: 14px; line-height: 1.55; color: #475569; }
+    .card strong { color: #0f172a; }
+    .status { font-size: 14px; color: #1d4ed8; margin: 0 0 16px; min-height: 1.4em; }
+    a.btn, button.btn {
+      display: block; width: 100%; box-sizing: border-box; border: 0; cursor: pointer;
+      text-decoration: none; background: #1d4ed8; color: #fff; border-radius: 10px;
+      padding: 14px 16px; font-size: 16px; font-weight: 600; margin: 0 0 10px;
+    }
+    a.btn.secondary, button.btn.secondary { background: #0f172a; }
+    a.btn.ghost, button.btn.ghost { background: #e2e8f0; color: #0f172a; }
+    .fine { margin-top: 14px; font-size: 12px; color: #94a3b8; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 class="brand">0199客服</h1>
+    <p class="seat" id="seatName">正在识别座席…</p>
+    <p class="code" id="seatCode"></p>
+    <p class="status" id="status">准备打开 App…</p>
+
+    <button class="btn" id="btnOpen" type="button">打开客服 App</button>
+    <button class="btn secondary" id="btnDownload" type="button">下载 App</button>
+    <a class="btn ghost" id="btnWeb" href="#">改用网页咨询</a>
+
+    <section class="card">
+      <p id="help">
+        点专属链接会<strong>自动下载 / 打开 App</strong>，并进入<strong>当前座席</strong>会话，无需在 App 里选代号。
+      </p>
+    </section>
+    <p class="fine">若已安装仍停在此页，请点「打开客服 App」。安装完成后也请再点一次专属链接或本页按钮。</p>
+  </main>
+  <script>
+    (function () {
+      var qs = new URLSearchParams(location.search);
+      var agent = String(qs.get("a") || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      var slug = String(qs.get("slug") || "0199cai").trim().toLowerCase() || "0199cai";
+      var ua = navigator.userAgent || "";
+      var isAndroid = /Android/i.test(ua);
+      var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      var inWechat = /MicroMessenger|QQ\//i.test(ua);
+
+      var seatNameEl = document.getElementById("seatName");
+      var seatCodeEl = document.getElementById("seatCode");
+      var statusEl = document.getElementById("status");
+      var btnOpen = document.getElementById("btnOpen");
+      var btnDownload = document.getElementById("btnDownload");
+      var btnWeb = document.getElementById("btnWeb");
+      var help = document.getElementById("help");
+
+      var webChat = "/c/" + encodeURIComponent(slug) + "/?a=" + encodeURIComponent(agent) + "&web=1";
+      var httpsOpen = "https://cs.ojy0871.com/c/" + encodeURIComponent(slug) + "/?a=" + encodeURIComponent(agent);
+      var schemeOpen = "seat0199://open/" + encodeURIComponent(agent);
+      var apkUrl = "./seat0199-release.apk";
+      var ipaUrl = "./Seat0199-unsigned.ipa";
+      var intentOpen =
+        "intent://cs.ojy0871.com/c/" + encodeURIComponent(slug) + "/?a=" + encodeURIComponent(agent) +
+        "#Intent;scheme=https;package=com.ojy0871.seat0199;" +
+        "S.browser_fallback_url=" + encodeURIComponent(location.href.split("#")[0]) + ";end";
+
+      btnWeb.href = webChat;
+
+      if (!agent) {
+        seatNameEl.textContent = "缺少座席代号";
+        statusEl.textContent = "链接无效，请使用座席专属链接";
+        btnOpen.disabled = true;
+        return;
+      }
+
+      try {
+        localStorage.setItem("seat0199_pending_agent", agent);
+        localStorage.setItem("seat0199_pending_slug", slug);
+        localStorage.setItem("seat0199_pending_at", String(Date.now()));
+      } catch (e) {}
+
+      seatCodeEl.textContent = "座席代号 " + agent;
+      seatNameEl.textContent = "座席 " + agent;
+
+      fetch("./0199cai-seats-app.json", { cache: "no-store" })
+        .then(function (r) { return r.json(); })
+        .then(function (arr) {
+          if (!Array.isArray(arr)) return;
+          for (var i = 0; i < arr.length; i++) {
+            if (String((arr[i] && arr[i].code) || "").toLowerCase() === agent) {
+              seatNameEl.textContent = arr[i].name || ("座席 " + agent);
+              break;
+            }
+          }
+        })
+        .catch(function () {});
+
+      function setStatus(t) { statusEl.textContent = t; }
+
+      function copyDeepLink() {
+        var text = schemeOpen;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text);
+            return;
+          }
+        } catch (e) {}
+        try {
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.cssText = "position:fixed;left:-9999px;top:0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+        } catch (e) {}
+      }
+
+      function tryOpenApp() {
+        copyDeepLink();
+        setStatus("正在打开对应座席…");
+        var hidden = false;
+        function onHide() { hidden = true; }
+        document.addEventListener("visibilitychange", function () {
+          if (document.hidden) onHide();
+        });
+        window.addEventListener("pagehide", onHide);
+
+        // custom scheme
+        var iframe = document.createElement("iframe");
+        iframe.style.cssText = "display:none;width:0;height:0;border:0";
+        iframe.src = schemeOpen;
+        document.body.appendChild(iframe);
+        setTimeout(function () {
+          try { document.body.removeChild(iframe); } catch (e) {}
+        }, 1500);
+
+        if (isAndroid) {
+          setTimeout(function () {
+            if (!hidden) location.href = intentOpen;
+          }, 120);
+        } else if (isIOS) {
+          setTimeout(function () {
+            if (!hidden) location.href = schemeOpen;
+          }, 120);
+          setTimeout(function () {
+            if (!hidden) location.href = httpsOpen;
+          }, 400);
+        } else {
+          location.href = httpsOpen;
+        }
+        return new Promise(function (resolve) {
+          setTimeout(function () { resolve(!hidden); }, 900);
+        });
+      }
+
+      var downloaded = false;
+      function downloadApp() {
+        if (downloaded) return;
+        downloaded = true;
+        copyDeepLink();
+        if (isIOS) {
+          setStatus("正在下载 iOS 安装包（需企业签）…");
+          location.href = ipaUrl;
+          help.innerHTML = "iOS 需企业签后安装。装好后回到本页点<strong>打开客服 App</strong>，会进入座席 <strong>" + agent + "</strong>。";
+          return;
+        }
+        setStatus("正在下载 Android App…");
+        // Use hidden iframe/link click so we stay on this page for "打开"
+        var a = document.createElement("a");
+        a.href = apkUrl;
+        a.setAttribute("download", "seat0199-release.apk");
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () {
+          try { document.body.removeChild(a); } catch (e) {}
+        }, 0);
+        // fallback navigation if click blocked
+        setTimeout(function () {
+          if (document.visibilityState === "visible") {
+            // keep page; some browsers need direct navigation
+          }
+        }, 300);
+        help.innerHTML = "正在下载。安装完成后点<strong>打开客服 App</strong>，将自动进入座席 <strong>" + agent + "</strong>，无需选择代号。";
+      }
+
+      btnOpen.addEventListener("click", function () {
+        tryOpenApp().then(function (stillHere) {
+          if (stillHere) setStatus("未检测到 App，请先下载安装，装好后再点打开");
+        });
+      });
+      btnDownload.addEventListener("click", function () {
+        downloaded = false;
+        downloadApp();
+      });
+
+      if (inWechat) {
+        setStatus("请在浏览器中打开本链接以下载 App");
+        help.innerHTML = "微信内无法直接安装。请点右上角 <strong>···</strong> → <strong>在浏览器打开</strong>，即可自动下载并对应该座席。";
+        return;
+      }
+
+      // Auto: try open app first; if still here, auto download
+      tryOpenApp().then(function (stillHere) {
+        if (!stillHere) {
+          setStatus("已尝试打开 App");
+          return;
+        }
+        if (isAndroid || isIOS) {
+          setStatus(isAndroid ? "未安装，正在自动下载 App…" : "未安装，请下载后企业签安装");
+          downloadApp();
+        } else {
+          setStatus("请在手机上打开专属链接以下载 App");
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

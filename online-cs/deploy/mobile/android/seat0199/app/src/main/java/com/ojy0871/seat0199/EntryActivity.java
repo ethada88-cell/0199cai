@@ -1,6 +1,8 @@
 package com.ojy0871.seat0199;
 
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -45,7 +47,36 @@ public class EntryActivity extends Activity {
             openChat(saved);
             return;
         }
+        // 下载落地页会把 seat0199://open/{代号} 写入剪贴板，装好后首次打开可识别
+        String fromClip = agentFromClipboard();
+        if (fromClip != null && !fromClip.isEmpty()) {
+            prefs().edit().putString("agent_code", fromClip).apply();
+            openChat(fromClip);
+            return;
+        }
         showGate();
+    }
+
+    private String agentFromClipboard() {
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm == null || !cm.hasPrimaryClip()) return null;
+            ClipData clip = cm.getPrimaryClip();
+            if (clip == null || clip.getItemCount() < 1) return null;
+            CharSequence raw = clip.getItemAt(0).coerceToText(this);
+            if (raw == null) return null;
+            String text = raw.toString().trim();
+            if (text.isEmpty()) return null;
+            Uri uri = null;
+            try { uri = Uri.parse(text); } catch (Exception ignored) {}
+            String fromUri = agentFromUri(uri);
+            if (fromUri != null && !fromUri.isEmpty()) return fromUri;
+            // bare code
+            String n = SeatsStore.normalize(text);
+            if (!n.isEmpty() && SeatsStore.find(seats, n) != null) return n;
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     private void showGate() {
