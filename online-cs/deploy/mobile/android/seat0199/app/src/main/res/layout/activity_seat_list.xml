@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/brand"
+        android:orientation="vertical"
+        android:paddingLeft="20dp"
+        android:paddingTop="18dp"
+        android:paddingRight="20dp"
+        android:paddingBottom="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0199客服"
+            android:textColor="#ffffff"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="选择座席开始原生会话"
+            android:textColor="#dbeafe"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/search"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_margin="12dp"
+        android:background="@color/surface"
+        android:hint="搜索座席名或代号"
+        android:imeOptions="actionSearch"
+        android:inputType="text"
+        android:paddingLeft="14dp"
+        android:paddingRight="14dp"
+        android:textColor="@color/text"
+        android:textColorHint="@color/muted"
+        android:textSize="15sp" />
+
+    <ListView
+        android:id="@+id/seatList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@color/surface"
+        android:divider="@color/divider"
+        android:dividerHeight="1dp"
+        android:paddingLeft="4dp"
+        android:paddingRight="4dp" />
+
+    <TextView
+        android:id="@+id/manualHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="12dp"
+        android:text="也可手动输入座席代号"
+        android:textColor="@color/brand"
+        android:textSize="13sp" />
+</LinearLayout>

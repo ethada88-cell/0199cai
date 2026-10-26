@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand">#1d4ed8</color>
+    <color name="brand_dark">#1e3a8a</color>
+    <color name="bg">#f1f5f9</color>
+    <color name="surface">#ffffff</color>
+    <color name="text">#0f172a</color>
+    <color name="muted">#64748b</color>
+    <color name="bubble_agent">#ffffff</color>
+    <color name="bubble_visitor">#1d4ed8</color>
+    <color name="bubble_system">#e2e8f0</color>
+    <color name="divider">#e2e8f0</color>
+</resources>

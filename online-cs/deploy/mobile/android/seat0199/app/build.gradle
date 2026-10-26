@@ -6,8 +6,8 @@ android {
         applicationId "com.ojy0871.seat0199"
         minSdk 24
         targetSdk 34
-        versionCode 2
-        versionName "1.1.0"
+        versionCode 3
+        versionName "1.2.0"
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -15,7 +15,7 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file("/tmp/seat0199/seat0199.keystore")
+            storeFile file("${rootProject.projectDir}/seat0199.keystore")
             storePassword "app0199store"
             keyAlias "app0199"
             keyPassword "app0199store"
@@ -25,4 +25,7 @@ android {
         release { minifyEnabled false; signingConfig signingConfigs.release }
         debug { signingConfig signingConfigs.release }
     }
+}
+dependencies {
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
 }

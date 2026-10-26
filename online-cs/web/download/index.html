@@ -14,7 +14,7 @@
     .card h2 { margin: 0 0 6px; font-size: 16px; }
     .card .meta { font-size: 12px; color: #94a3b8; margin-bottom: 12px; word-break: break-all; }
     a.btn {
-      display: inline-block; text-decoration: none; background: #2563eb; color: #fff;
+      display: inline-block; text-decoration: none; background: #1d4ed8; color: #fff;
       padding: 10px 14px; border-radius: 8px; font-size: 14px; margin-right: 8px; margin-bottom: 8px;
     }
     a.btn.secondary { background: #0f172a; }
@@ -25,29 +25,28 @@
 <body>
   <main>
     <h1>坐席 App 下载</h1>
-    <p>0199 客服 App（Seat0199）支持公司<strong>全部座席</strong>。每位座席用自己的专属访客链接进 App 会话；Android 可直接安装，iOS 为未签名包需企业签后安装。</p>
+    <p>0199 客服 App（Seat0199）为<strong>原生访客端</strong>（非网页套壳），内置公司全部 100 个座席代号。点选座席后用原生界面与对应座席会话。</p>
 
     <section class="card">
       <h2>Android · 0199客服</h2>
-      <div class="meta">包名 com.ojy0871.seat0199 · v1.1 · 全座席通用</div>
+      <div class="meta">包名 com.ojy0871.seat0199 · v1.2.0 · 原生 · 100 座席</div>
       <a class="btn" href="./seat0199-release.apk">下载 APK</a>
-      <p class="note">安装后：点后台「我的访客链接」打开，或手动输入 <code>?a=</code> 后面的座席代号。也可用 <code>seat0199://open/代号</code>。</p>
+      <p class="note">安装后打开即见座席列表（可搜索）。也可点专属链接 <code>?a=代号</code> 或 <code>seat0199://open/代号</code> 直接进入。</p>
     </section>
 
     <section class="card">
       <h2>iOS · 0199客服（企业签用）</h2>
-      <div class="meta">Bundle ID com.ojy0871.seat0199 · 未签名 IPA</div>
+      <div class="meta">Bundle ID com.ojy0871.seat0199 · 未签名 IPA · 原生</div>
       <a class="btn secondary" href="./Seat0199-unsigned.ipa">下载 IPA</a>
-      <p class="note">下载后用企业签重签再装；未重签无法直接安装。用法同 Android：专属链接或输入座席代号。</p>
+      <p class="note">下载后用企业签重签再装；未重签无法直接安装。功能同 Android。</p>
     </section>
 
     <section class="card">
-      <h2>怎么进自己的会话</h2>
-      <p class="note" style="margin:0">
-        每位座席的专属链接形如<br />
-        <code>https://cs.ojy0871.com/c/0199cai/?a=座席代号</code><br />
-        App 会记住该代号；换座席可在 App 内「切换座席」。
-      </p>
+      <h2>座席代号清单</h2>
+      <div class="meta">App 已内置；也可单独下载对照</div>
+      <a class="btn secondary" href="./0199cai-seats-app.json">0199cai-seats-app.json</a>
+      <a class="btn secondary" href="./0199cai-seats-100.csv">CSV</a>
+      <p class="note">专属链接形如 <code>https://cs.ojy0871.com/c/0199cai/?a=座席代号</code></p>
     </section>
 
     <section class="card">

@@ -12,16 +12,14 @@
         android:usesCleartextTraffic="false"
         android:hardwareAccelerated="true">
         <activity
-            android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:name=".SeatListActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustPan">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 座席专属 https 链接：任意 ?a=代号 打开 App 会话 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -31,7 +29,6 @@
                     android:host="cs.ojy0871.com"
                     android:pathPrefix="/c/0199cai" />
             </intent-filter>
-            <!-- 备用自定义协议 seat0199://open/{代号} -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -39,5 +36,9 @@
                 <data android:scheme="seat0199" android:host="open" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".ChatActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
