@@ -1,10 +1,14 @@
 package com.ojy0871.seat0199;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
@@ -13,18 +17,25 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
-/** 0199cai 坐席 eddqc 访客通道原生壳 */
+/**
+ * 0199cai 全座席通用访客壳：任意座席专属链接 /c/0199cai/?a={代号} 都可进 App 会话。
+ * 首次无代号时手动输入；之后记住。用专属链接打开会覆盖并保存该代号。
+ */
 public class MainActivity extends Activity {
-    // 坐席代号 eddqc · 公司 0199cai（内嵌官网 + 客服）
-    private static final String START_URL = "https://cs.ojy0871.com/c/0199cai/?a=eddqc";
+    private static final String CHAT_BASE = "https://cs.ojy0871.com/c/0199cai/";
+    private static final String PREFS = "seat0199";
+    private static final String KEY_AGENT = "agent_code";
     private static final int FILE_CHOOSER = 4101;
 
     private WebView webView;
     private ProgressBar progress;
     private ValueCallback<Uri[]> fileCallback;
+    private String agentCode = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,7 +68,7 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(true);
         settings.setUserAgentString(
                 "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 "
-                        + "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 Seat0199/1.0");
+                        + "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 Seat0199/1.1");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -66,7 +77,14 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return openExternalIfNeeded(request.getUrl());
+                Uri uri = request.getUrl();
+                String code = agentCodeFromUri(uri);
+                if (code != null && !code.isEmpty()) {
+                    saveAgent(code);
+                    view.loadUrl(chatUrl(code));
+                    return true;
+                }
+                return openExternalIfNeeded(uri);
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
@@ -91,8 +109,92 @@ public class MainActivity extends Activity {
             }
         });
 
-        if (savedInstanceState != null) webView.restoreState(savedInstanceState);
-        else webView.loadUrl(START_URL);
+        agentCode = prefs().getString(KEY_AGENT, "");
+        String fromIntent = agentCodeFromUri(getIntent() != null ? getIntent().getData() : null);
+        if (fromIntent != null && !fromIntent.isEmpty()) {
+            saveAgent(fromIntent);
+        }
+
+        if (savedInstanceState != null) {
+            webView.restoreState(savedInstanceState);
+        } else if (!agentCode.isEmpty()) {
+            webView.loadUrl(chatUrl(agentCode));
+        } else {
+            askAgentCode(true);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String code = agentCodeFromUri(intent != null ? intent.getData() : null);
+        if (code != null && !code.isEmpty()) {
+            saveAgent(code);
+            if (webView != null) webView.loadUrl(chatUrl(code));
+        }
+    }
+
+    private SharedPreferences prefs() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE);
+    }
+
+    private void saveAgent(String code) {
+        agentCode = normalizeAgent(code);
+        prefs().edit().putString(KEY_AGENT, agentCode).apply();
+    }
+
+    private static String normalizeAgent(String raw) {
+        if (raw == null) return "";
+        return raw.trim().toLowerCase().replaceAll("[^a-z0-9]", "");
+    }
+
+    private static String chatUrl(String code) {
+        return CHAT_BASE + "?a=" + Uri.encode(code);
+    }
+
+    /** 从 https://cs.ojy0871.com/c/0199cai/?a=xxx 或 seat0199://0199cai?a=xxx 取座席代号 */
+    private static String agentCodeFromUri(Uri uri) {
+        if (uri == null) return null;
+        String a = uri.getQueryParameter("a");
+        if (a != null && !a.trim().isEmpty()) return normalizeAgent(a);
+        // seat0199://open/eddqc
+        String host = uri.getHost() == null ? "" : uri.getHost();
+        if ("seat0199".equalsIgnoreCase(uri.getScheme()) && "open".equalsIgnoreCase(host)) {
+            String path = uri.getPath() == null ? "" : uri.getPath();
+            if (path.startsWith("/")) path = path.substring(1);
+            if (!path.isEmpty()) return normalizeAgent(path);
+        }
+        return null;
+    }
+
+    private void askAgentCode(boolean required) {
+        final EditText input = new EditText(this);
+        input.setHint("例如 eddqc");
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(32)});
+        if (!agentCode.isEmpty()) input.setText(agentCode);
+
+        AlertDialog.Builder b = new AlertDialog.Builder(this)
+                .setTitle("输入座席专属代号")
+                .setMessage("打开后台「我的访客链接」里 ?a= 后面的代号。每个座席用自己的代号，App 会记住。")
+                .setView(input)
+                .setCancelable(!required)
+                .setPositiveButton("进入会话", (d, w) -> {
+                    String code = normalizeAgent(input.getText() != null ? input.getText().toString() : "");
+                    if (code.isEmpty()) {
+                        Toast.makeText(this, "请输入座席代号", Toast.LENGTH_SHORT).show();
+                        askAgentCode(required);
+                        return;
+                    }
+                    saveAgent(code);
+                    webView.loadUrl(chatUrl(code));
+                });
+        if (!required) {
+            b.setNeutralButton("切换座席", (d, w) -> askAgentCode(true));
+            b.setNegativeButton("取消", null);
+        }
+        b.show();
     }
 
     private boolean openExternalIfNeeded(Uri uri) {
@@ -153,8 +255,16 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        // 长按返回可切换座席：连按两次间隔外用菜单更清晰——这里二次返回退出前提供切换
         if (webView != null && webView.canGoBack()) { webView.goBack(); return; }
-        super.onBackPressed();
+        new AlertDialog.Builder(this)
+                .setTitle("0199客服")
+                .setItems(new String[]{"切换座席代号", "退出"}, (d, which) -> {
+                    if (which == 0) askAgentCode(true);
+                    else finish();
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     @Override

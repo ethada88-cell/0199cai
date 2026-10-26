@@ -18,25 +18,36 @@
       padding: 10px 14px; border-radius: 8px; font-size: 14px; margin-right: 8px; margin-bottom: 8px;
     }
     a.btn.secondary { background: #0f172a; }
-    .note { font-size: 12px; color: #64748b; margin-top: 8px; }
+    .note { font-size: 12px; color: #64748b; margin-top: 8px; line-height: 1.5; }
+    code { font-size: 12px; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; }
   </style>
 </head>
 <body>
   <main>
     <h1>坐席 App 下载</h1>
-    <p>0199 坐席（eddqc）原生壳。Android 可直接安装；iOS 为未签名包，需企业签后安装。</p>
+    <p>0199 客服 App（Seat0199）支持公司<strong>全部座席</strong>。每位座席用自己的专属访客链接进 App 会话；Android 可直接安装，iOS 为未签名包需企业签后安装。</p>
 
     <section class="card">
       <h2>Android · 0199客服</h2>
-      <div class="meta">包名 com.ojy0871.seat0199 · 打开 /c/0199cai/?a=eddqc</div>
+      <div class="meta">包名 com.ojy0871.seat0199 · v1.1 · 全座席通用</div>
       <a class="btn" href="./seat0199-release.apk">下载 APK</a>
+      <p class="note">安装后：点后台「我的访客链接」打开，或手动输入 <code>?a=</code> 后面的座席代号。也可用 <code>seat0199://open/代号</code>。</p>
     </section>
 
     <section class="card">
       <h2>iOS · 0199客服（企业签用）</h2>
       <div class="meta">Bundle ID com.ojy0871.seat0199 · 未签名 IPA</div>
       <a class="btn secondary" href="./Seat0199-unsigned.ipa">下载 IPA</a>
-      <p class="note">下载后用企业签重签再装；未重签无法直接安装。</p>
+      <p class="note">下载后用企业签重签再装；未重签无法直接安装。用法同 Android：专属链接或输入座席代号。</p>
+    </section>
+
+    <section class="card">
+      <h2>怎么进自己的会话</h2>
+      <p class="note" style="margin:0">
+        每位座席的专属链接形如<br />
+        <code>https://cs.ojy0871.com/c/0199cai/?a=座席代号</code><br />
+        App 会记住该代号；换座席可在 App 内「切换座席」。
+      </p>
     </section>
 
     <section class="card">

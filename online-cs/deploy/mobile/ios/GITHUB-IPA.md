@@ -30,4 +30,4 @@ export_method 选 `ad-hoc` 或 `development`。
 ## Bundle ID
 
 - App0199：`com.ojy0871.app0199`（0199彩票 / `_m/0199w`）
-- Seat0199：`com.ojy0871.seat0199`（坐席 / `0199cai?a=eddqc`）
+- Seat0199：`com.ojy0871.seat0199`（全座席 / `0199cai/?a={代号}`）

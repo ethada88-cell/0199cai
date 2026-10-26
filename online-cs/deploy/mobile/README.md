@@ -5,7 +5,7 @@ WebView 原生壳，按入口分两个包：
 | 包 | 打开地址 | Android 包名 | iOS Bundle ID |
 |----|----------|--------------|---------------|
 | **app0199**（0199彩票） | `https://cs.ojy0871.com/_m/0199w/` | `com.ojy0871.app0199` | `com.ojy0871.app0199` |
-| **seat0199**（0199客服 / 坐席 eddqc） | `https://cs.ojy0871.com/c/0199cai/?a=eddqc` | `com.ojy0871.seat0199` | `com.ojy0871.seat0199` |
+| **seat0199**（0199客服 / 全座席） | `https://cs.ojy0871.com/c/0199cai/?a={座席代号}` | `com.ojy0871.seat0199` | `com.ojy0871.seat0199` |
 
 ## 用 Git 环境打包（推荐）
 
