@@ -9,7 +9,7 @@ import { SUSPICIOUS_SCORE, evaluateCheck, fingerprint } from "@/lib/score";
 import { normalizeSiteKey } from "@/lib/site";
 import { cleanSource } from "@/lib/source";
 import { noteSourceProbe } from "@/lib/source-probe";
-import { recordVisit } from "@/lib/store";
+import { commitOpenChallenge, recordVisit } from "@/lib/store";
 import type { CheckResult, ClientSignals, Reason } from "@/lib/types";
 
 const IDEMPOTENCY_ID_RE = /^[0-9a-f-]{36}$/i;
@@ -242,6 +242,16 @@ export function runCheck(input: {
     !engaged &&
     elapsed < MIN_DWELL_MS;
   if (input.persist !== false && (followUp || input.lab) && !thinVisit) {
+    // 离开时若已有待滑块挑战，只结算那一条，不再新增一条「无弹窗假量」。
+    if (
+      leaving &&
+      verdict === "fake" &&
+      action === "flag" &&
+      !hardAuto &&
+      commitOpenChallenge(input.accountId, siteKey, input.ip, fpKey)
+    ) {
+      return result;
+    }
     recordVisit(result, { defer: verdict === "fake" && action === "flag" && !leaving && challenge });
   }
   return result;

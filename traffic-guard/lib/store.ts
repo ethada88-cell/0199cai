@@ -1270,6 +1270,43 @@ export function failSlide(accountId: string, siteKey: string, id: string) {
   return true;
 }
 
+/**
+ * 离开页时优先结算已有「待滑块」记录，避免再落一条无弹窗假量把 PV假量撑到接近两倍。
+ * 匹配同站最近 pending（优先同 IP / 指纹）。
+ */
+export function commitOpenChallenge(
+  accountId: string,
+  siteKey: string,
+  ip: string,
+  fp?: string,
+): boolean {
+  if (isAdminReader()) return false;
+  const { account, key } = locate(accountId, siteKey);
+  const list = loadEvents(account, key);
+  const since = Date.now() - 5 * 60 * 1000;
+  let hit: StoredEvent | null = null;
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const event = list[i];
+    if (!event.pending || event.lab || event.accountId !== account || event.siteKey !== key) continue;
+    if (!isReview(event) || (event.at || 0) < since) continue;
+    if (!event.challenge && !event.popupShown) continue;
+    if (fp && event.fp && event.fp === fp) {
+      hit = event;
+      break;
+    }
+    if (ip && event.ip === ip) {
+      hit = event;
+      break;
+    }
+    if (!hit) hit = event;
+  }
+  if (!hit) return false;
+  hit.popupShown = true;
+  const ok = commitPending(account, key, hit);
+  if (ok) persistEvents(account, key);
+  return ok;
+}
+
 export function notePerfectSlide(accountId: string, siteKey: string, id: string) {
   const { account, key } = locate(accountId, siteKey);
   const event = loadEvents(account, key).find((item) => item.id === id && item.accountId === account && item.siteKey === key && !item.lab && isReview(item));
