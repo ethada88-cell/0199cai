@@ -611,13 +611,26 @@
     var style = document.createElement("style");
     style.id = "tg-gate-style";
     // 尺寸交给 JS（visualViewport）；外壳透明；只有中间面板接收点击。
+    var appleGlass = false;
+    try {
+      var ua0 = String((global.navigator && global.navigator.userAgent) || "");
+      appleGlass = /iPhone|iPad|iPod/i.test(ua0) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
+    } catch (eApple0) {}
+
     style.textContent = [
       "html[data-tg-gate='1'] iframe{pointer-events:none !important;}",
-      /* 绝不写 inset/100svh：透明 fixed 层一旦盖住 Safari 底栏，毛玻璃会变成实心白条 */
+      /* 绝不写 inset/100svh：全屏 fixed（含透明）会让 Safari 底栏失去毛玻璃 */
       "#tg-gate{position:fixed;z-index:2147483647;display:flex;align-items:center;justify-content:center;box-sizing:border-box;margin:0;padding:0;border:0;background:transparent !important;pointer-events:none;}",
       "#tg-gate-dim{position:absolute;inset:0;background:rgba(15,23,32,.45);pointer-events:none;}",
-      "#tg-gate-panel{position:relative;z-index:1;pointer-events:auto;}"
+      "#tg-gate-panel{position:relative;z-index:1;pointer-events:auto;}",
+      /* Safari：遮罩缩成中间一块，底/顶留给网页，系统地址栏保持毛玻璃 */
+      "html[data-tg-apple='1'] #tg-gate{align-items:flex-start;padding-top:min(18vh,140px);}",
+      "html[data-tg-apple='1'] #tg-gate-dim{display:none !important;}"
     ].join("");
+    if (appleGlass) {
+      try { root.setAttribute("data-tg-apple", "1"); } catch (eAppleAttr) {}
+    }
+
     var overlay = document.createElement("div");
     overlay.id = "tg-gate";
     overlay.setAttribute("role", "dialog");
@@ -630,7 +643,7 @@
 
     var panel = document.createElement("div");
     panel.id = "tg-gate-panel";
-    panel.setAttribute("style", "width:min(360px,calc(100% - 32px));max-height:min(70svh,520px);overflow:auto;background:#fff;border-radius:8px;padding:28px 24px 22px;box-shadow:0 12px 40px rgba(0,0,0,.2);text-align:center;font-family:PingFang SC,Microsoft YaHei,sans-serif;flex-shrink:0;");
+    panel.setAttribute("style", "width:min(360px,calc(100% - 32px));max-height:min(70svh,520px);overflow:auto;background:#fff;border-radius:8px;padding:28px 24px 22px;box-shadow:0 12px 40px rgba(0,0,0,.28);text-align:center;font-family:PingFang SC,Microsoft YaHei,sans-serif;flex-shrink:0;");
 
     var title = document.createElement("div");
     title.textContent = "访问确认";
@@ -670,47 +683,39 @@
     }
 
     function fitViewport() {
-      // iPhone Safari：position:fixed 已相对 visual viewport。
-      // 再加 offsetTop 会把遮罩整体下移，底边盖进地址栏 → 毛玻璃变实心白条。
+      // Safari 保持网站毛玻璃：fixed 层只能包住弹窗本身，绝不能拉满可视区。
       var vv = global.visualViewport;
       var h = Math.max(1, Math.round((vv && vv.height) || global.innerHeight || 0));
-      var apple = false;
-      try {
-        var ua = String((global.navigator && global.navigator.userAgent) || "");
-        // 苹果自带 Safari / WebKit；不含 CriOS（Chrome）时也按苹果底栏处理
-        apple = /iPhone|iPad|iPod/i.test(ua) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
-      } catch (eApple) {}
-      var clearBottom = 0;
-      if (apple) {
-        clearBottom = 120;
-        try {
-          var gap = Math.round((global.innerHeight || 0) - h);
-          if (gap > 0) clearBottom = Math.max(clearBottom, Math.min(168, gap + 16));
-        } catch (eGap) {}
-        try {
-          var layoutH = Math.round((document.documentElement && document.documentElement.clientHeight) || 0);
-          var layoutGap = layoutH - h;
-          if (layoutGap > 0) clearBottom = Math.max(clearBottom, Math.min(168, layoutGap + 16));
-        } catch (eClear) {}
-      }
-      setImp(overlay, "top", "0");
+      var apple = appleGlass;
       setImp(overlay, "left", "0");
       setImp(overlay, "right", "0");
       setImp(overlay, "width", "auto");
-      setImp(overlay, "bottom", clearBottom + "px");
-      setImp(overlay, "height", "auto");
-      setImp(overlay, "max-height", "none");
       setImp(overlay, "background", "transparent");
-      setImp(overlay, "padding", "0");
       setImp(overlay, "pointer-events", "none");
       setImp(overlay, "transform", "none");
       setImp(overlay, "-webkit-transform", "none");
-      // 变暗层只铺满遮罩盒，绝不伸出底部留白带。
-      setImp(dim, "top", "0");
-      setImp(dim, "left", "0");
-      setImp(dim, "right", "0");
-      setImp(dim, "bottom", "0");
-      setImp(dim, "height", "auto");
+      if (apple) {
+        // 只占上中一带；bottom:auto + height:auto → 底部整段网页仍在，系统底栏可透出。
+        var topPad = Math.max(48, Math.min(160, Math.round(h * 0.14)));
+        setImp(overlay, "top", topPad + "px");
+        setImp(overlay, "bottom", "auto");
+        setImp(overlay, "height", "auto");
+        setImp(overlay, "max-height", "none");
+        setImp(overlay, "padding", "0");
+        setImp(dim, "display", "none");
+      } else {
+        setImp(overlay, "top", "0");
+        setImp(overlay, "bottom", "0");
+        setImp(overlay, "height", "auto");
+        setImp(overlay, "max-height", "none");
+        setImp(overlay, "padding", "0");
+        setImp(dim, "display", "block");
+        setImp(dim, "top", "0");
+        setImp(dim, "left", "0");
+        setImp(dim, "right", "0");
+        setImp(dim, "bottom", "0");
+        setImp(dim, "height", "auto");
+      }
       setImp(panel, "pointer-events", "auto");
     }
 
@@ -768,6 +773,7 @@
         if (document.body) document.body.style.removeProperty("overflow");
       } catch (eOv) {}
       try { root.removeAttribute("data-tg-gate"); } catch (e) {}
+      try { root.removeAttribute("data-tg-apple"); } catch (eAppleRm) {}
     }
 
     var observer = new MutationObserver(function () {
