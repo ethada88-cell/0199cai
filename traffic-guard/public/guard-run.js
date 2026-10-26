@@ -606,15 +606,15 @@
     global.__tgOpen = true;
     var root = document.documentElement;
     try { root.setAttribute("data-tg-gate", "1"); } catch (e) {}
-    // 遮挡层（全屏 dim / inset / visualViewport 重算）已全部去掉：只留中间滑块卡片，Safari 一直保持毛玻璃。
+    // 不用 fixed/absolute/全屏罩：任何贴视口的层在「拉底再回顶」时都会让 Safari 底栏失去毛玻璃。
+    // 验证卡片插入文档流顶部，随页面滚，系统地址栏一直保持毛玻璃。
 
     var style = document.createElement("style");
     style.id = "tg-gate-style";
     style.textContent = [
       "html[data-tg-gate='1'] iframe{pointer-events:none !important;}",
-      /* 无变暗、无全屏罩；卡片用静态 svh，不跟回弹重算，避免拉顶/拉底再挡毛玻璃 */
-      "#tg-gate{position:fixed;z-index:2147483647;left:16px;right:16px;top:10svh;bottom:auto;width:auto;height:auto;max-height:55svh;margin:0;padding:0;border:0;background:transparent !important;pointer-events:none;display:block;box-sizing:border-box;transform:none;}",
-      "#tg-gate-panel{position:relative;z-index:1;pointer-events:auto;margin:0 auto;width:min(360px,100%);max-height:55svh;overflow:auto;background:#fff;border-radius:8px;padding:28px 24px 22px;box-shadow:0 12px 40px rgba(0,0,0,.28);text-align:center;font-family:PingFang SC,Microsoft YaHei,sans-serif;box-sizing:border-box;}"
+      "#tg-gate{position:relative !important;left:auto !important;right:auto !important;top:auto !important;bottom:auto !important;inset:auto !important;z-index:2147483647;display:block;width:auto;max-width:100%;height:auto;max-height:none;margin:12px 16px 8px;padding:0;border:0;background:transparent !important;pointer-events:none;box-sizing:border-box;transform:none !important;}",
+      "#tg-gate-panel{position:relative;pointer-events:auto;margin:0 auto;width:min(360px,100%);overflow:auto;background:#fff;border-radius:8px;padding:28px 24px 22px;box-shadow:0 12px 40px rgba(0,0,0,.28);text-align:center;font-family:PingFang SC,Microsoft YaHei,sans-serif;box-sizing:border-box;}"
     ].join("");
 
     var overlay = document.createElement("div");
@@ -662,7 +662,15 @@
       if (!global.__tgOpen) return;
       var parent = document.body || root;
       if (!style.isConnected) (document.head || root).appendChild(style);
-      if (!overlay.isConnected || overlay.parentNode !== parent) parent.appendChild(overlay);
+      // 插到 body 最前：普通文档流，不是 fixed，拉底回顶也不会挡毛玻璃
+      if (!overlay.isConnected || overlay.parentNode !== parent || parent.firstChild !== overlay) {
+        try {
+          if (parent.firstChild) parent.insertBefore(overlay, parent.firstChild);
+          else parent.appendChild(overlay);
+        } catch (eIns) {
+          try { parent.appendChild(overlay); } catch (eApp) {}
+        }
+      }
       if (!shownAt) shownAt = nowMs();
       tuckFrames();
     }
