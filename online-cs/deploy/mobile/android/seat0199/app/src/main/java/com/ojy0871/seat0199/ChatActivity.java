@@ -2,6 +2,7 @@ package com.ojy0871.seat0199;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -128,13 +129,28 @@ public class ChatActivity extends Activity {
     private void showMenu() {
         new AlertDialog.Builder(this)
                 .setTitle(seatName)
-                .setItems(new String[]{"刷新消息", "开始新会话", "返回座席列表"}, (d, which) -> {
+                .setItems(new String[]{"刷新消息", "开始新会话", "退出"}, (d, which) -> {
                     if (which == 0) pull(false);
                     else if (which == 1) connectSession(true);
                     else finish();
                 })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent == null) return;
+        String code = SeatsStore.normalize(intent.getStringExtra(EXTRA_CODE));
+        if (code.isEmpty() || code.equals(agentCode)) return;
+        agentCode = code;
+        String name = intent.getStringExtra(EXTRA_NAME);
+        seatName = (name == null || name.trim().isEmpty()) ? code : name;
+        prefs().edit().putString("agent_code", agentCode).apply();
+        titleView.setText(seatName);
+        connectSession(true);
     }
 
     private void setStatus(String s) {

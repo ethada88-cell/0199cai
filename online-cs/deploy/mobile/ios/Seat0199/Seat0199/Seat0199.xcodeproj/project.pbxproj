@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* AppDelegate.swift */; };
-		A10000000000000000000002 /* SeatListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* SeatListViewController.swift */; };
+		A10000000000000000000002 /* EntryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* EntryViewController.swift */; };
 		A10000000000000000000003 /* ChatViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* ChatViewController.swift */; };
 		A10000000000000000000004 /* ChatAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* ChatAPI.swift */; };
 		A10000000000000000000005 /* seats.json in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* seats.json */; };
@@ -17,7 +17,7 @@
 /* Begin PBXFileReference section */
 		A10000000000000000000010 /* Seat0199.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Seat0199.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000011 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		A10000000000000000000012 /* SeatListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeatListViewController.swift; sourceTree = "<group>"; };
+		A10000000000000000000012 /* EntryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryViewController.swift; sourceTree = "<group>"; };
 		A10000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000014 /* seats.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = seats.json; sourceTree = "<group>"; };
 		A10000000000000000000015 /* ChatViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewController.swift; sourceTree = "<group>"; };
@@ -47,7 +47,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000011 /* AppDelegate.swift */,
-				A10000000000000000000012 /* SeatListViewController.swift */,
+				A10000000000000000000012 /* EntryViewController.swift */,
 				A10000000000000000000015 /* ChatViewController.swift */,
 				A10000000000000000000016 /* ChatAPI.swift */,
 				A10000000000000000000013 /* Info.plist */,
@@ -130,7 +130,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000001 /* AppDelegate.swift in Sources */,
-				A10000000000000000000002 /* SeatListViewController.swift in Sources */,
+				A10000000000000000000002 /* EntryViewController.swift in Sources */,
 				A10000000000000000000003 /* ChatViewController.swift in Sources */,
 				A10000000000000000000004 /* ChatAPI.swift in Sources */,
 			);
@@ -173,7 +173,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Seat0199/Info.plist;
@@ -181,7 +181,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ojy0871.seat0199;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
@@ -193,7 +193,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Seat0199/Info.plist;
@@ -201,7 +201,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ojy0871.seat0199;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;

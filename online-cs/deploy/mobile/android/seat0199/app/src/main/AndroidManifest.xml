@@ -12,7 +12,7 @@
         android:usesCleartextTraffic="false"
         android:hardwareAccelerated="true">
         <activity
-            android:name=".SeatListActivity"
+            android:name=".EntryActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustPan">
@@ -20,6 +20,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 专属 https 链接：?a=代号 → 自动识别座席 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -39,6 +40,7 @@
         <activity
             android:name=".ChatActivity"
             android:exported="false"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
