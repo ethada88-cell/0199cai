@@ -606,30 +606,16 @@
     global.__tgOpen = true;
     var root = document.documentElement;
     try { root.setAttribute("data-tg-gate", "1"); } catch (e) {}
-    // 不锁 html/body overflow、不拦 touch：否则页面拉不动，Safari 底栏也透不出滚动内容。
+    // 遮挡层（全屏 dim / inset / visualViewport 重算）已全部去掉：只留中间滑块卡片，Safari 一直保持毛玻璃。
 
     var style = document.createElement("style");
     style.id = "tg-gate-style";
-    // 尺寸交给 JS（visualViewport）；外壳透明；只有中间面板接收点击。
-    var appleGlass = false;
-    try {
-      var ua0 = String((global.navigator && global.navigator.userAgent) || "");
-      appleGlass = /iPhone|iPad|iPod/i.test(ua0) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
-    } catch (eApple0) {}
-
     style.textContent = [
       "html[data-tg-gate='1'] iframe{pointer-events:none !important;}",
-      /* 绝不写 inset/100svh：全屏 fixed（含透明）会让 Safari 底栏失去毛玻璃 */
-      "#tg-gate{position:fixed;z-index:2147483647;display:block;box-sizing:border-box;margin:0;padding:0;border:0;background:transparent !important;pointer-events:none;}",
-      "#tg-gate-dim{position:absolute;inset:0;background:rgba(15,23,32,.45);pointer-events:none;}",
-      "#tg-gate-panel{position:relative;z-index:1;pointer-events:auto;margin:0 auto;}",
-      /* Safari：不要用 flex 拉高遮罩；无全屏变暗；底部留给系统毛玻璃 */
-      "html[data-tg-apple='1'] #tg-gate-dim{display:none !important;}",
-      "html[data-tg-apple='1'] #tg-gate-panel{width:min(360px,calc(100% - 32px));}"
+      /* 无变暗、无全屏罩；卡片用静态 svh，不跟回弹重算，避免拉顶/拉底再挡毛玻璃 */
+      "#tg-gate{position:fixed;z-index:2147483647;left:16px;right:16px;top:10svh;bottom:auto;width:auto;height:auto;max-height:55svh;margin:0;padding:0;border:0;background:transparent !important;pointer-events:none;display:block;box-sizing:border-box;transform:none;}",
+      "#tg-gate-panel{position:relative;z-index:1;pointer-events:auto;margin:0 auto;width:min(360px,100%);max-height:55svh;overflow:auto;background:#fff;border-radius:8px;padding:28px 24px 22px;box-shadow:0 12px 40px rgba(0,0,0,.28);text-align:center;font-family:PingFang SC,Microsoft YaHei,sans-serif;box-sizing:border-box;}"
     ].join("");
-    if (appleGlass) {
-      try { root.setAttribute("data-tg-apple", "1"); } catch (eAppleAttr) {}
-    }
 
     var overlay = document.createElement("div");
     overlay.id = "tg-gate";
@@ -637,13 +623,8 @@
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", "访问确认");
 
-    var dim = document.createElement("div");
-    dim.id = "tg-gate-dim";
-    dim.setAttribute("aria-hidden", "true");
-
     var panel = document.createElement("div");
     panel.id = "tg-gate-panel";
-    panel.setAttribute("style", "width:min(360px,calc(100% - 32px));max-height:min(70svh,520px);overflow:auto;background:#fff;border-radius:8px;padding:28px 24px 22px;box-shadow:0 12px 40px rgba(0,0,0,.28);text-align:center;font-family:PingFang SC,Microsoft YaHei,sans-serif;flex-shrink:0;");
 
     var title = document.createElement("div");
     title.textContent = "访问确认";
@@ -675,121 +656,23 @@
     panel.appendChild(title);
     panel.appendChild(desc);
     panel.appendChild(track);
-    overlay.appendChild(dim);
     overlay.appendChild(panel);
-
-    function setImp(el, name, value) {
-      try { el.style.setProperty(name, value, "important"); } catch (eSet) { el.style[name] = value; }
-    }
-
-    function fitViewport() {
-      // Safari：上下拉/回弹/刷新后 visualViewport 会变；遮罩必须始终只等于弹窗盒，底边低于「底栏保留带」。
-      var vv = global.visualViewport;
-      var h = Math.max(1, Math.round((vv && vv.height) || global.innerHeight || 0));
-      var w = Math.max(1, Math.round((vv && vv.width) || global.innerWidth || 0));
-      var apple = appleGlass;
-      setImp(overlay, "background", "transparent");
-      setImp(overlay, "pointer-events", "none");
-      setImp(overlay, "transform", "none");
-      setImp(overlay, "-webkit-transform", "none");
-      setImp(overlay, "padding", "0");
-      setImp(overlay, "margin", "0");
-      setImp(overlay, "border", "0");
-      if (apple) {
-        setImp(dim, "display", "none");
-        // 底部保留带：地址栏 + 回弹时多留一些，防止拉到顶/底后仍盖住毛玻璃
-        var reserve = Math.max(156, Math.round(h * 0.24));
-        try {
-          var gap = Math.round((global.innerHeight || 0) - h);
-          if (gap > 0) reserve = Math.max(reserve, Math.min(220, gap + 48));
-        } catch (eGap) {}
-        var side = 16;
-        var boxW = Math.min(360, Math.max(200, w - side * 2));
-        setImp(panel, "width", boxW + "px");
-        setImp(panel, "max-width", boxW + "px");
-        setImp(panel, "max-height", Math.max(160, h - reserve - 24) + "px");
-        setImp(panel, "margin", "0");
-        // 先按内容测高，再夹紧 top，保证 overlay 底边 <= h - reserve
-        setImp(overlay, "position", "fixed");
-        setImp(overlay, "left", Math.round((w - boxW) / 2) + "px");
-        setImp(overlay, "right", "auto");
-        setImp(overlay, "width", boxW + "px");
-        setImp(overlay, "bottom", "auto");
-        setImp(overlay, "height", "auto");
-        setImp(overlay, "max-height", "none");
-        setImp(overlay, "top", "0");
-        var ph = Math.max(panel.offsetHeight || 0, 200);
-        if (ph > h - reserve - 16) ph = Math.max(160, h - reserve - 16);
-        var topPad = Math.round((h - reserve - ph) / 2);
-        if (topPad < 12) topPad = 12;
-        if (topPad + ph > h - reserve) topPad = Math.max(8, h - reserve - ph);
-        setImp(overlay, "top", topPad + "px");
-        setImp(overlay, "height", ph + "px");
-        setImp(overlay, "max-height", ph + "px");
-      } else {
-        setImp(overlay, "position", "fixed");
-        setImp(overlay, "top", "0");
-        setImp(overlay, "left", "0");
-        setImp(overlay, "right", "0");
-        setImp(overlay, "bottom", "0");
-        setImp(overlay, "width", "auto");
-        setImp(overlay, "height", "auto");
-        setImp(overlay, "max-height", "none");
-        setImp(overlay, "display", "flex");
-        setImp(overlay, "align-items", "center");
-        setImp(overlay, "justify-content", "center");
-        setImp(dim, "display", "block");
-        setImp(dim, "top", "0");
-        setImp(dim, "left", "0");
-        setImp(dim, "right", "0");
-        setImp(dim, "bottom", "0");
-        setImp(dim, "height", "auto");
-      }
-      setImp(panel, "pointer-events", "auto");
-    }
-
-    var fitScheduled = 0;
-    function onViewportChange() {
-      if (!global.__tgOpen) return;
-      // 回弹过程中 vv 抖动：合并到一帧再量，避免拉到顶/底时短暂盖住底栏
-      if (fitScheduled) return;
-      fitScheduled = global.requestAnimationFrame ? global.requestAnimationFrame(function () {
-        fitScheduled = 0;
-        if (global.__tgOpen) fitViewport();
-      }) : (global.setTimeout(function () {
-        fitScheduled = 0;
-        if (global.__tgOpen) fitViewport();
-      }, 16), 1);
-    }
 
     function mount() {
       if (!global.__tgOpen) return;
-      // 挂 body：Safari 对 html 根上的 fixed 层更容易盖进底栏。
       var parent = document.body || root;
       if (!style.isConnected) (document.head || root).appendChild(style);
       if (!overlay.isConnected || overlay.parentNode !== parent) parent.appendChild(overlay);
-      if (parent.lastElementChild !== overlay) parent.appendChild(overlay);
-      fitViewport();
-      // 布局后再夹一次（字体/滑块轨宽度变化）
-      onViewportChange();
       if (!shownAt) shownAt = nowMs();
       tuckFrames();
     }
 
     function release() {
-      // 无关闭键：只有滑动成功（passed）才能撤掉遮罩。
+      // 无关闭键：只有滑动成功（passed）才能撤掉卡片。
       if (!global.__tgOpen || !passed) return;
       global.__tgOpen = false;
       try { global.__tgGate = false; } catch (eGate) {}
       try { observer.disconnect(); } catch (e) {}
-      try {
-        if (global.visualViewport) {
-          global.visualViewport.removeEventListener("resize", onViewportChange);
-          global.visualViewport.removeEventListener("scroll", onViewportChange);
-        }
-        global.removeEventListener("resize", onViewportChange);
-        global.removeEventListener("orientationchange", onViewportChange);
-      } catch (e2) {}
       try {
         for (var hi = 0; hi < holdNames.length; hi += 1) {
           document.removeEventListener(holdNames[hi], hold, true);
@@ -1024,14 +907,7 @@
       document.addEventListener(name, hold, true);
     });
 
-    try {
-      if (global.visualViewport) {
-        global.visualViewport.addEventListener("resize", onViewportChange);
-        global.visualViewport.addEventListener("scroll", onViewportChange);
-      }
-      global.addEventListener("resize", onViewportChange);
-      global.addEventListener("orientationchange", onViewportChange);
-    } catch (eVv) {}
+    // 不再监听 visualViewport：拉顶/拉底回弹时重算会再次挡住 Safari 毛玻璃。
     mount();
     try { observer.observe(root, { childList: true, subtree: true }); } catch (e) {}
     ping(base, account, result.id, "show");
