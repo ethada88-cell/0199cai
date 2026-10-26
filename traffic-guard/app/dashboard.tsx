@@ -342,6 +342,22 @@ export function Dashboard({
   const router = useRouter();
   const [notes, setNotes] = useState(initial.notes);
   const [noteState, setNoteState] = useState<Record<string, string>>({});
+  const [live, setLive] = useState({
+    fake: initial.fake,
+    fakeIps: initial.fakeIps,
+    suspect: initial.suspect,
+    suspectIps: initial.suspectIps,
+    farm: initial.farm,
+    crawler: initial.crawler,
+    other: initial.other,
+    popupShown: initial.popupShown,
+    popupAll: initial.popupAll,
+    popupClosed: initial.popupClosed,
+    slidePassed: initial.slidePassed,
+    realIps: initial.realIps,
+    realPv: initial.realPv,
+    at: 0,
+  });
   const savedNotes = useRef(initial.notes);
   const draft = useRef({ text: "", open: false });
   const onDraft = useCallback((text: string, open: boolean) => {
@@ -368,6 +384,22 @@ export function Dashboard({
   useEffect(() => {
     setNotes(initial.notes);
     savedNotes.current = initial.notes;
+    setLive((prev) => ({
+      ...prev,
+      fake: initial.fake,
+      fakeIps: initial.fakeIps,
+      suspect: initial.suspect,
+      suspectIps: initial.suspectIps,
+      farm: initial.farm,
+      crawler: initial.crawler,
+      other: initial.other,
+      popupShown: initial.popupShown,
+      popupAll: initial.popupAll,
+      popupClosed: initial.popupClosed,
+      slidePassed: initial.slidePassed,
+      realIps: initial.realIps,
+      realPv: initial.realPv,
+    }));
   }, [initial]);
   useEffect(() => {
     function onPop() {
@@ -380,18 +412,71 @@ export function Dashboard({
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [initial.q, initial.siteKey]);
-  // 顶部假量/真实量跟服务器实时账本同步；检索下拉打开时不停刷以免打断输入。
-  // 大账号 SSR 偏重，30 秒刷新一次即可，避免每 10 秒整页重绘。
+  // 顶栏走轻量 /live 接口约 3 秒一刷；表格仍用 SSR，60 秒刷新，避免大账号整页重绘。
   useEffect(() => {
-    const tick = window.setInterval(() => {
+    let dead = false;
+    async function pullLive() {
+      if (document.hidden || draft.current.open) return;
+      try {
+        const params = new URLSearchParams({
+          from: initial.from,
+          to: initial.to,
+          account: initial.account || "*",
+        });
+        const res = await fetch(`/api/v1/admin/live?${params}`, { cache: "no-store" });
+        if (!res.ok || dead) return;
+        const data = (await res.json()) as Partial<typeof live> & { ok?: boolean; at?: number };
+        if (!data?.ok || dead) return;
+        setLive((prev) => ({
+          ...prev,
+          fake: Number(data.fake) || 0,
+          fakeIps: Number(data.fakeIps) || 0,
+          suspect: Number(data.suspect) || 0,
+          suspectIps: Number(data.suspectIps) || 0,
+          farm: Number(data.farm) || 0,
+          crawler: Number(data.crawler) || 0,
+          other: Number(data.other) || 0,
+          popupShown: Number(data.popupShown) || 0,
+          popupAll: Number(data.popupAll) || 0,
+          slidePassed: Number(data.slidePassed) || 0,
+          realIps: Number(data.realIps) || 0,
+          realPv: Number(data.realPv) || 0,
+          at: Number(data.at) || Date.now(),
+        }));
+      } catch {
+        /* keep last good numbers */
+      }
+    }
+    pullLive();
+    const liveTick = window.setInterval(pullLive, 3000);
+    const pageTick = window.setInterval(() => {
       if (document.hidden) return;
       if (draft.current.open) return;
       router.refresh();
-    }, 30000);
-    return () => window.clearInterval(tick);
-  }, [router]);
+    }, 60000);
+    return () => {
+      dead = true;
+      window.clearInterval(liveTick);
+      window.clearInterval(pageTick);
+    };
+  }, [router, initial.from, initial.to, initial.account]);
 
-  const stats = initial;
+  const stats = {
+    ...initial,
+    fake: live.fake,
+    fakeIps: live.fakeIps,
+    suspect: live.suspect,
+    suspectIps: live.suspectIps,
+    farm: live.farm,
+    crawler: live.crawler,
+    other: live.other,
+    popupShown: live.popupShown,
+    popupAll: live.popupAll,
+    popupClosed: live.popupClosed,
+    slidePassed: live.slidePassed,
+    realIps: live.realIps,
+    realPv: live.realPv,
+  };
   const pageSize = stats.pageSize || 20;
   const totalRows = stats.total ?? stats.rows.length;
   const pageCount = Math.max(1, Math.ceil(totalRows / pageSize));
@@ -599,7 +684,16 @@ export function Dashboard({
       </div>
 
       <div>
-        <div className="mb-2 text-sm text-[#666]">刷量检测</div>
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#666]">
+          <span>刷量检测</span>
+          <span className="inline-flex items-center gap-1.5 text-xs text-[#18a058]">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#18a058]/opacity-40" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#18a058]" />
+            </span>
+            实时更新{live.at ? ` · ${new Date(live.at).toLocaleTimeString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" })}` : ""}
+          </span>
+        </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
           {cards.map((card) => {
             const active = card.list === "sites"

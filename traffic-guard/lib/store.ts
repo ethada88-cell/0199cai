@@ -764,7 +764,7 @@ function flushAccountIpTotals() {
 
 function scheduleAccountIpFlush() {
   if (ipFlushTimer()) return;
-  setIpFlushTimer(setTimeout(flushAccountIpTotals, 800));
+  setIpFlushTimer(setTimeout(flushAccountIpTotals, 250));
 }
 
 const accountIpTotalsMtime = tgMap<string, number>("accountIpTotalsMtime");
@@ -2448,7 +2448,8 @@ function flushAccountTotals() {
 
 function scheduleAccountTotalsFlush() {
   if (totalsFlushTimer()) return;
-  setTotalsFlushTimer(setTimeout(flushAccountTotals, 800));
+  // 后台顶栏实时刷：落盘尽量快，避免卡片比真实流量慢一整拍。
+  setTotalsFlushTimer(setTimeout(flushAccountTotals, 250));
 }
 
 function rebuildAccountTotals(accountId: string, force = false) {
@@ -2989,30 +2990,46 @@ function scanOverview(accounts: { id: string; username: string }[], from: string
 }
 
 function withLiveTotals(accounts: { id: string; username: string }[], from: string, to: string, bundle: Bundle): Bundle {
-  const live = fastPvTotals(accounts, from, to);
-  const ips = fastIpTotals(accounts, from, to);
-  if (!live && !ips) return bundle;
+  const live = liveDashboardTotals(accounts, from, to);
   return {
     ...bundle,
     totals: {
       ...bundle.totals,
-      fake: live?.fake ?? bundle.totals.fake,
-      realPv: live?.realPv ?? bundle.totals.realPv,
-      suspect: live?.suspect ?? bundle.totals.suspect,
-      farm: live?.farm ?? bundle.totals.farm,
-      crawler: live?.crawler ?? bundle.totals.crawler,
-      other: live?.other ?? bundle.totals.other,
-      slidePassed: live?.slidePassed ?? bundle.totals.slidePassed,
-      // 顶栏「弹窗未通过」用 popupAll；与 PV假量一样走 day-totals，避免大账号只扫到部分站。
-      popupShown: live?.popupShown ?? bundle.totals.popupShown,
-      popupAll: live?.popupShown ?? bundle.totals.popupAll,
-      // 与真实 PV 同源快路径：各站 IP 名单分别去重再相加（同 IP 进两站算两次）。
-      // 不能只用 bundle 里未扫完的 heads，否则大账号会出现「PV 全量、IP 只扫到一小截」。
-      realIps: ips?.realIps ?? bundle.totals.realIps,
-      suspectIps: ips?.suspectIps ?? bundle.totals.suspectIps,
-      // IP假量优先 day-totals.fakeIps（不随 events 截断）；否则退回 ip-totals / 站点扫表。
-      fakeIps: (live?.fakeIps || 0) > 0 ? (live?.fakeIps || 0) : (ips?.fakeIps ?? bundle.totals.fakeIps),
+      fake: live.fake,
+      realPv: live.realPv,
+      suspect: live.suspect,
+      farm: live.farm,
+      crawler: live.crawler,
+      other: live.other,
+      slidePassed: live.slidePassed,
+      popupShown: live.popupShown,
+      popupAll: live.popupAll,
+      realIps: live.realIps,
+      suspectIps: live.suspectIps,
+      fakeIps: live.fakeIps,
     },
+  };
+}
+
+/** 顶栏实时数字：只读 day-totals / ip-totals，O(天数)，供后台轮询。 */
+export function liveDashboardTotals(accounts: { id: string }[], from: string, to: string) {
+  for (const account of accounts) seedLiveAccount(account.id);
+  const live = fastPvTotals(accounts, from, to);
+  const ips = fastIpTotals(accounts, from, to);
+  const fakeIpsLive = live?.fakeIps || 0;
+  return {
+    fake: live?.fake || 0,
+    fakeIps: fakeIpsLive > 0 ? fakeIpsLive : ips?.fakeIps || 0,
+    realPv: live?.realPv || 0,
+    realIps: ips?.realIps || 0,
+    suspect: live?.suspect || 0,
+    suspectIps: ips?.suspectIps || 0,
+    farm: live?.farm || 0,
+    crawler: live?.crawler || 0,
+    other: live?.other || 0,
+    slidePassed: live?.slidePassed || 0,
+    popupShown: live?.popupShown || 0,
+    popupAll: live?.popupShown || 0,
   };
 }
 
