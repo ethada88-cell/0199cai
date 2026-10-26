@@ -3011,7 +3011,7 @@ function withLiveTotals(accounts: { id: string; username: string }[], from: stri
       realIps: ips?.realIps ?? bundle.totals.realIps,
       suspectIps: ips?.suspectIps ?? bundle.totals.suspectIps,
       // IP假量优先 day-totals.fakeIps（不随 events 截断）；否则退回 ip-totals / 站点扫表。
-      fakeIps: (live?.fakeIps || 0) > 0 ? live?.fakeIps : ips?.fakeIps ?? bundle.totals.fakeIps,
+      fakeIps: (live?.fakeIps || 0) > 0 ? (live?.fakeIps || 0) : (ips?.fakeIps ?? bundle.totals.fakeIps),
     },
   };
 }
