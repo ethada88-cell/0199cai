@@ -425,7 +425,7 @@ export function Dashboard({
     { label: "PV假量", value: stats.fake || 0, note: "广告商外部来路刷量次数。点击看来路 / IP / 设备", verdict: "fake" as Verdict, list: "visits" as const, tag: "" },
     { label: "嫌疑 IP", value: stats.suspectIps || 0, note: "软特征且无正常浏览。各站分别去重再相加；同一 IP 进多站分别计。已计入真实 IP。有正常浏览改真实；脚本态互动改假量", verdict: "suspect" as Verdict, list: false as false | "sites" | "visits", tag: "" },
     { label: "嫌疑 PV", value: stats.suspect || 0, note: "软特征且无正常浏览的访问次数。点击查看各站 / 来路 / IP / 设备", verdict: "suspect" as Verdict, list: false as false | "sites" | "visits", tag: "" },
-    { label: "弹窗未通过", value: stats.popupAll || 0, note: "确认假量后已弹窗，没有滑动成功（无关闭键，只有滑到头才消失）", verdict: null as Verdict | null, list: false as false | "sites" | "visits", tag: "" },
+    { label: "弹窗未通过", value: stats.popupAll || 0, note: "发过滑块且未滑过（含超时/离开/客户端未回报）。爬虫/无头等硬自动化不弹窗，只记 PV假量，所以会小于 PV假量", verdict: null as Verdict | null, list: false as false | "sites" | "visits", tag: "" },
     { label: "机房 IP", value: stats.farm, note: "点击查看各站", verdict: "farm" as Verdict, list: false as false | "sites" | "visits", tag: "" },
     { label: "爬虫", value: stats.crawler, note: "点击查看各站", verdict: "crawler" as Verdict, list: false as false | "sites" | "visits", tag: "" },
     { label: "滑动成功", value: stats.slidePassed || 0, note: "自然滑到头计入真实；轨迹像脚本仍记假量。爬虫/无头不弹窗", verdict: null as Verdict | null, list: false as false | "sites" | "visits", tag: "" },

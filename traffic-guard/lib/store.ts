@@ -618,6 +618,11 @@ function commitPending(account: string, key: string, event: StoredEvent) {
   }
   const host = fakeSourceHost(event);
   const flags = classesOf(event);
+  // 发过滑块挑战的：超时 / 离开 / 客户端没回报 show，也算「弹窗未通过」。
+  // 硬自动化（challenge=false）不弹窗，只进 PV假量，不进弹窗未通过。
+  if (event.challenge || event.popupShown || event.popupClosed) {
+    event.popupShown = true;
+  }
   touchDay(account, key, shanghaiDay(event.at), (stat) => {
     addClass(stat, host, flags);
     if (event.popupShown) stat.popupShown += 1;
@@ -1280,6 +1285,9 @@ export function notePerfectSlide(accountId: string, siteKey: string, id: string)
       weight: 0,
     });
   }
+  // 轨迹像脚本仍落假量，但滑块已露出，计入弹窗未通过。
+  event.popupShown = true;
+  event.challenge = true;
   commitPending(account, key, event);
   persistEvents(account, key);
   return true;
@@ -2823,6 +2831,9 @@ function withLiveTotals(accounts: { id: string; username: string }[], from: stri
       crawler: live?.crawler ?? bundle.totals.crawler,
       other: live?.other ?? bundle.totals.other,
       slidePassed: live?.slidePassed ?? bundle.totals.slidePassed,
+      // 顶栏「弹窗未通过」用 popupAll；与 PV假量一样走 day-totals，避免大账号只扫到部分站。
+      popupShown: live?.popupShown ?? bundle.totals.popupShown,
+      popupAll: live?.popupShown ?? bundle.totals.popupAll,
       // 与真实 PV 同源快路径：各站 IP 名单分别去重再相加（同 IP 进两站算两次）。
       // 不能只用 bundle 里未扫完的 heads，否则大账号会出现「PV 全量、IP 只扫到一小截」。
       realIps: ips?.realIps ?? bundle.totals.realIps,
