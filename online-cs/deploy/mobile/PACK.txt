@@ -1,13 +1,16 @@
-用 Git 打包 0199 App
+用 Git 环境打包 0199 App
 
-1) 提交源码后执行：
-   bash online-cs/deploy/mobile/scripts/git-pack.sh
+在 Cursor / 本机已装 Android SDK 的环境里，从仓库源码重打 APK + 源码 zip：
 
-2) 产物目录：
-   online-cs/deploy/mobile/dist/
+  export ANDROID_HOME=/tmp/android-sdk   # 或你的 SDK 路径
+  bash online-cs/deploy/mobile/scripts/env-pack.sh
 
-3) 安装包：
-   - Android：dist/app0199-release.apk 、 dist/seat0199-release.apk
-   - iOS：需 Mac 打开 ios/*/…xcodeproj 再 Archive（Linux 打不出已签名 IPA）
+仅打源码归档（不编译）：
 
-4) GitHub：仓库创建后用 Code → Download ZIP，或 clone 后跑上面脚本。
+  bash online-cs/deploy/mobile/scripts/git-pack.sh
+
+产物目录：online-cs/deploy/mobile/dist/
+
+- Android：app0199-release.apk 、 seat0199-release.apk
+- 源码：mobile-0199-all.zip 、 *-android-src.zip 、 *-ios-src.zip
+- iOS IPA：需 Mac + Xcode Archive（Linux 环境打不出已签名 IPA）

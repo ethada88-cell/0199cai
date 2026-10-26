@@ -7,7 +7,16 @@ WebView 原生壳，按入口分两个包：
 | **app0199**（0199彩票） | `https://cs.ojy0871.com/_m/0199w/` | `com.ojy0871.app0199` | `com.ojy0871.app0199` |
 | **seat0199**（0199客服 / 坐席 eddqc） | `https://cs.ojy0871.com/c/0199cai/?a=eddqc` | `com.ojy0871.seat0199` | `com.ojy0871.seat0199` |
 
-## 用 Git 打包（源码归档）
+## 用 Git 环境打包（推荐）
+
+在已配置 Android SDK 的 Cloud Agent / 本地环境，从仓库源码编译 APK 并归档：
+
+```bash
+export ANDROID_HOME=/tmp/android-sdk   # 按实际 SDK 路径修改
+bash online-cs/deploy/mobile/scripts/env-pack.sh
+```
+
+## 仅 Git 源码归档
 
 在仓库根目录执行：
 
