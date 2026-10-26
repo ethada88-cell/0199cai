@@ -1,5 +1,6 @@
-# Build signed iOS IPA on GitHub-hosted macOS runners.
-# Requires repository Secrets — see online-cs/deploy/mobile/ios/GITHUB-IPA.md
+# Build iOS IPA on GitHub macOS runners.
+# - unsigned: no Apple cert — for 企业签 / 第三方重签
+# - ad-hoc / development: needs repository Secrets (see ios/GITHUB-IPA.md)
 name: Build iOS IPA
 
 on:
@@ -8,18 +9,19 @@ on:
       app:
         description: Which shell to build
         required: true
-        default: both
+        default: seat0199
         type: choice
         options:
           - app0199
           - seat0199
           - both
       export_method:
-        description: IPA export method (must match cert + profile)
+        description: unsigned=企业签用未签名包; ad-hoc/development=需证书 Secrets
         required: true
-        default: ad-hoc
+        default: unsigned
         type: choice
         options:
+          - unsigned
           - ad-hoc
           - development
 
@@ -42,7 +44,7 @@ jobs:
           fi
 
   ipa:
-    name: IPA ${{ matrix.app }}
+    name: IPA ${{ matrix.app }} (${{ inputs.export_method }})
     needs: prepare
     runs-on: macos-14
     strategy:
@@ -52,23 +54,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Require signing secrets
-        env:
-          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
-          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          missing=0
-          for k in IOS_CERTIFICATE_P12_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROVISION_PROFILE_BASE64 IOS_TEAM_ID KEYCHAIN_PASSWORD; do
-            if [ -z "${!k}" ]; then
-              echo "::error::Missing secret: $k — see online-cs/deploy/mobile/ios/GITHUB-IPA.md"
-              missing=1
-            fi
-          done
-          exit "$missing"
 
       - name: Select project
         id: sel
@@ -97,7 +82,77 @@ jobs:
             echo "sign_identity=Apple Distribution" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      # ---------- unsigned (企业签) ----------
+      - name: Build unsigned .app
+        if: inputs.export_method == 'unsigned'
+        run: |
+          BUILD_DIR="$RUNNER_TEMP/ios-build"
+          mkdir -p "$BUILD_DIR"
+          set -o pipefail
+          xcodebuild \
+            -project "${{ steps.sel.outputs.project }}" \
+            -scheme "${{ steps.sel.outputs.scheme }}" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+          APP=$(find "$RUNNER_TEMP/DerivedData" -path '*/Release-iphoneos/*.app' -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "Release-iphoneos .app not found; listing:"
+            find "$RUNNER_TEMP/DerivedData" -name '*.app' -type d | head -50
+            exit 1
+          fi
+          echo "APP_PATH=$APP" >> "$GITHUB_ENV"
+          echo "Built: $APP"
+          ls -la "$APP"
+
+      - name: Package unsigned IPA
+        if: inputs.export_method == 'unsigned'
+        run: |
+          STAGE="$RUNNER_TEMP/ipa-stage"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/Payload"
+          cp -R "$APP_PATH" "$STAGE/Payload/"
+          IPA_FILE="$RUNNER_TEMP/${{ steps.sel.outputs.ipa_name }}-unsigned.ipa"
+          (
+            cd "$STAGE"
+            zip -qr "$IPA_FILE" Payload
+          )
+          ls -la "$IPA_FILE"
+          unzip -l "$IPA_FILE" | head -30
+          echo "IPA_FILE=$IPA_FILE" >> "$GITHUB_ENV"
+
+      # ---------- signed (ad-hoc / development) ----------
+      - name: Require signing secrets
+        if: inputs.export_method != 'unsigned'
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          missing=0
+          for k in IOS_CERTIFICATE_P12_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROVISION_PROFILE_BASE64 IOS_TEAM_ID KEYCHAIN_PASSWORD; do
+            if [ -z "${!k}" ]; then
+              echo "::error::Missing secret: $k — see online-cs/deploy/mobile/ios/GITHUB-IPA.md"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
       - name: Import certificate and provisioning profile
+        if: inputs.export_method != 'unsigned'
         env:
           IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
@@ -127,6 +182,7 @@ jobs:
           echo "Imported profile: $NAME ($UUID)"
 
       - name: Write export options
+        if: inputs.export_method != 'unsigned'
         env:
           OUT: ${{ runner.temp }}/ExportOptions.plist
           METHOD: ${{ inputs.export_method }}
@@ -173,10 +229,8 @@ jobs:
           PY
           echo "EXPORT_OPTIONS=$OUT" >> "$GITHUB_ENV"
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-
-      - name: Archive
+      - name: Archive signed
+        if: inputs.export_method != 'unsigned'
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
@@ -195,7 +249,8 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="$PROVISION_NAME" \
             archive
 
-      - name: Export IPA
+      - name: Export signed IPA
+        if: inputs.export_method != 'unsigned'
         run: |
           EXPORT_DIR="$RUNNER_TEMP/ipa-out"
           mkdir -p "$EXPORT_DIR"
@@ -212,7 +267,7 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.sel.outputs.ipa_name }}-ipa
+          name: ${{ steps.sel.outputs.ipa_name }}-${{ inputs.export_method }}-ipa
           path: ${{ env.IPA_FILE }}
           if-no-files-found: error
           retention-days: 14

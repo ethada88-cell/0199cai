@@ -65,6 +65,7 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 本 Cloud Agent 是 Linux，本地打不出已签名 IPA。可用：
 
-1. **GitHub Actions（推荐）**：见 `ios/GITHUB-IPA.md`  
-   推送到 GitHub 后配置证书 Secrets，在 Actions 里跑 **Build iOS IPA**，产物在 Artifacts。
-2. **本机 Mac + Xcode**：打开 `ios/App0199/.../App0199.xcodeproj` 或 `ios/Seat0199/.../Seat0199.xcodeproj` → Archive → 导出 IPA
+1. **GitHub Actions 企业签（推荐）**：见 `ios/GITHUB-IPA.md`  
+   Actions → **Build iOS IPA** → export_method 选 **`unsigned`** → 下载未签名 IPA → 用你的企业签重签。  
+   （`ad-hoc` / `development` 才需要 Apple 证书 Secrets）
+2. **本机 Mac + Xcode**：打开对应 `.xcodeproj` → Archive → 导出 IPA
