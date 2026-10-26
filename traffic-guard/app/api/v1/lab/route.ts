@@ -93,13 +93,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, action: "allow", tracked: false, error: "invalid_site" }, { status: 400 });
   }
   const sample = SCENARIOS[scenario];
+  // 实验室模拟「有广告来路的二次检测」，否则空来路会被强制改真实，测不到采集→分析→弹窗链路。
+  const humanLike = scenario === "real";
+  const signals: ClientSignals = {
+    ...sample.signals,
+    engagement: {
+      elapsed: 5000,
+      pointerMoves: humanLike ? 12 : 0,
+      scroll: humanLike ? 3 : 0,
+    },
+  };
   const result = runCheck({
     ip: sample.ip,
     accountId: session.accountId,
     siteKey,
-    signals: sample.signals,
+    signals,
     headerUa: sample.headerUa,
     lab: true,
+    followUp: true,
+    persist: false,
+    source: {
+      host: siteKey,
+      href: `https://${siteKey}/`,
+      referrer: "https://ads.lab-traffic-test.example/",
+    },
   });
   const { fp, ...publicResult } = result as typeof result & { fp?: string };
   void fp;
