@@ -71,8 +71,8 @@ node scripts/click-stats.mjs --by site --source example.com
 账号页有「出站点击代码」。和原来的刷量代码一起放进公共模板，每个页面只放一次。不要放进 Vue、React 组件，也不要用 `innerHTML` 插进去。
 
 ```html
-<script async src="https://lljc.ki8uh.com/guard.js" data-account="账号id"></script>
-<script async src="https://lljc.ki8uh.com/track.js" data-account="账号id"></script>
+<script async src="https://llcj.mtekww.cn/guard.js" data-account="账号id"></script>
+<script async src="https://llcj.mtekww.cn/track.js" data-account="账号id"></script>
 ```
 
 不用改广告链接。脚本听的是整页点击，位置随机、顺序变化、后来才插入页面，都能记到。广告位按这个顺序自动取：
@@ -96,7 +96,7 @@ node scripts/click-stats.mjs --by site --source example.com
 
 ## 部署
 
-- 页面和 `/collect` 都要走 HTTPS。脚本地址已经是 `https://lljc.ki8uh.com/track.js`。
+- 页面和 `/collect` 都要走 HTTPS。脚本地址已经是 `https://llcj.mtekww.cn/track.js`。
 - `track.js` 缓存 5 分钟，前面的 CDN 不要缓存更久。`/collect` 不能缓存。
 - 浏览器会带上 Origin。服务器不在白名单里的来源只收到 204 或一张空图，不会写入。
 - 同一个 IP 10 秒内最多记 40 次，多出来的直接丢掉，仍然马上返回，不拖页面。
