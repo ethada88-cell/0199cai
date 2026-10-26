@@ -20,7 +20,7 @@ https://cs.ojy0871.com/download/seat0199-release.apk
 【iOS 未签名 · 企业签用】
 https://cs.ojy0871.com/download/Seat0199-unsigned.ipa
 Bundle ID：com.ojy0871.seat0199
-需用企业签重签后再安装。用法同 Android。
+GitHub Actions 已重打原生包；需用企业签重签后再安装。用法同 Android。
 
 【下载页】
 https://cs.ojy0871.com/download/
