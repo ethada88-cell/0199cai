@@ -778,7 +778,12 @@ function syncIpDayCount(account: string, day: string, refs: IpRefDay) {
     file = {};
     accountIpTotalsMem.set(account, file);
   }
-  const next: AccountIpDay = { real: refs.real.size, suspect: refs.suspect.size };
+  // 引用计数 = 该 IP 出现在多少个站；求和 =「各站分别去重再相加」（同 IP 进两站算两次）。
+  let real = 0;
+  let suspect = 0;
+  for (const n of refs.real.values()) real += n;
+  for (const n of refs.suspect.values()) suspect += n;
+  const next: AccountIpDay = { real, suspect };
   if (!next.real && !next.suspect) delete file[day];
   else file[day] = next;
   accountIpDirty.add(account);
@@ -903,15 +908,11 @@ function fastIpTotals(accounts: { id: string }[], from: string, to: string): Par
     ensureAccountIpTotals(id);
     if (accountIpRefsReady.has(id)) {
       const refsByDay = accountIpRefs.get(id) || {};
-      const realSet = new Set<string>();
-      const susSet = new Set<string>();
       for (const [day, refs] of Object.entries(refsByDay)) {
         if (day < from || day > to || !refs) continue;
-        for (const ip of refs.real.keys()) realSet.add(ip);
-        for (const ip of refs.suspect.keys()) susSet.add(ip);
+        for (const n of refs.real.values()) realIps += n;
+        for (const n of refs.suspect.values()) suspectIps += n;
       }
-      realIps += realSet.size;
-      suspectIps += susSet.size;
       any = true;
       continue;
     }
@@ -2809,19 +2810,23 @@ function scanOverview(accounts: { id: string; username: string }[], from: string
 
 function withLiveTotals(accounts: { id: string; username: string }[], from: string, to: string, bundle: Bundle): Bundle {
   const live = fastPvTotals(accounts, from, to);
-  if (!live) return bundle;
+  const ips = fastIpTotals(accounts, from, to);
+  if (!live && !ips) return bundle;
   return {
     ...bundle,
     totals: {
       ...bundle.totals,
-      fake: live.fake ?? bundle.totals.fake,
-      realPv: live.realPv ?? bundle.totals.realPv,
-      suspect: live.suspect ?? bundle.totals.suspect,
-      farm: live.farm ?? bundle.totals.farm,
-      crawler: live.crawler ?? bundle.totals.crawler,
-      other: live.other ?? bundle.totals.other,
-      slidePassed: live.slidePassed ?? bundle.totals.slidePassed,
-      // 真实 IP / 嫌疑 IP / IP假量：各站名单分别去重后再相加，跨站相同 IP 不算一次。
+      fake: live?.fake ?? bundle.totals.fake,
+      realPv: live?.realPv ?? bundle.totals.realPv,
+      suspect: live?.suspect ?? bundle.totals.suspect,
+      farm: live?.farm ?? bundle.totals.farm,
+      crawler: live?.crawler ?? bundle.totals.crawler,
+      other: live?.other ?? bundle.totals.other,
+      slidePassed: live?.slidePassed ?? bundle.totals.slidePassed,
+      // 与真实 PV 同源快路径：各站 IP 名单分别去重再相加（同 IP 进两站算两次）。
+      // 不能只用 bundle 里未扫完的 heads，否则大账号会出现「PV 全量、IP 只扫到一小截」。
+      realIps: ips?.realIps ?? bundle.totals.realIps,
+      suspectIps: ips?.suspectIps ?? bundle.totals.suspectIps,
     },
   };
 }
