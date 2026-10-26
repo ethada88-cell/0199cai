@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <title>登录 - 在线客服工作台</title>
+  <style>
+    :root {
+      --blue: #5b9be9;
+      --blue-deep: #3d8bfd;
+      --blue-panel: #6aa8ef;
+      --text: #334155;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: var(--blue);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .card {
+      width: min(920px, 94vw); min-height: 520px; height: auto; max-height: 96vh;
+      display: grid; grid-template-columns: 1fr 1fr;
+      border-radius: 16px; overflow: hidden;
+      box-shadow: 0 24px 60px rgba(15, 40, 80, .28);
+      background: #fff;
+    }
+    .art {
+      background: linear-gradient(160deg, #6aa8ef, #4d93e4);
+      position: relative; overflow: hidden;
+    }
+    .art::before, .art::after {
+      content: ""; position: absolute; border-radius: 50%;
+      background: rgba(255,255,255,.12);
+    }
+    .art::before { width: 220px; height: 220px; left: -40px; top: -40px; }
+    .art::after { width: 160px; height: 160px; right: 30px; bottom: 40px; }
+    .illus {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      color: #fff; gap: 16px;
+    }
+    .devices { display: flex; align-items: flex-end; gap: 18px; }
+    .monitor {
+      width: 160px; height: 110px; border: 3px solid rgba(255,255,255,.85);
+      border-radius: 10px; background: rgba(255,255,255,.18); position: relative;
+    }
+    .monitor::after {
+      content: ""; position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%);
+      width: 50px; height: 10px; background: rgba(255,255,255,.7); border-radius: 4px;
+    }
+    .bubble {
+      position: absolute; left: 18px; top: 22px; width: 54px; height: 34px;
+      background: #fff; border-radius: 10px;
+    }
+    .phone {
+      width: 64px; height: 120px; border: 3px solid rgba(255,255,255,.9);
+      border-radius: 12px; background: rgba(255,255,255,.2); padding: 10px 8px;
+      display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;
+    }
+    .bar { height: 10px; border-radius: 3px; }
+    .b1 { width: 70%; background: #f97316; }
+    .b2 { width: 90%; background: #22c55e; }
+    .b3 { width: 55%; background: #ef4444; }
+    .form {
+      padding: 36px 52px 28px; display: flex; flex-direction: column; overflow: auto;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 18px; }
+    .logo {
+      width: 36px; height: 36px; border-radius: 50%; background: var(--blue-deep);
+      display: grid; place-items: center; color: #fff; font-size: 14px; font-weight: 700;
+    }
+    .brand strong { color: #1e3a5f; letter-spacing: .04em; font-size: 1.15rem; }
+    h1 { margin: 0 0 28px; text-align: center; font-size: 1.15rem; color: var(--text); font-weight: 700; }
+    label { display: block; font-size: 13px; color: #64748b; margin-bottom: 8px; }
+    label span { color: #ef4444; }
+    .field { margin-bottom: 18px; position: relative; }
+    input {
+      width: 100%; height: 44px; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 0 40px 0 14px; background: #f8fafc; font-size: 14px; color: var(--text);
+      outline: none;
+    }
+    input:focus { border-color: var(--blue-deep); background: #fff; box-shadow: 0 0 0 3px rgba(61,139,253,.15); }
+    .eye {
+      position: absolute; right: 10px; top: 34px; border: 0; background: transparent;
+      color: #94a3b8; cursor: pointer; font-size: 13px; padding: 6px;
+    }
+    button.submit {
+      margin-top: 8px; height: 46px; border: 0; border-radius: 8px;
+      background: var(--blue-deep); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    button.submit:hover { filter: brightness(1.05); }
+    button.submit:disabled { opacity: .7; cursor: wait; }
+    .err { min-height: 20px; margin-top: 10px; color: #ef4444; font-size: 13px; text-align: center; }
+    .links { margin-top: auto; padding-top: 18px; text-align: center; font-size: 13px; color: var(--muted); }
+    .links a { color: var(--blue-deep); text-decoration: none; }
+    .hint { color: #475569; font-size: 13px; line-height: 1.55; margin: 0 0 14px; }
+    .slide { margin: 2px 0 16px; user-select: none; touch-action: none; }
+    .slide-track {
+      position: relative; height: 44px; border-radius: 8px; overflow: hidden;
+      background: #f1f5f9; border: 1px solid #e2e8f0;
+    }
+    .slide-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #dbeafe; }
+    .slide-text {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      color: #64748b; font-size: 13px; pointer-events: none;
+    }
+    .slide.ok .slide-text { color: #1d4ed8; }
+    .slide-knob {
+      position: absolute; left: 0; top: 0; width: 46px; height: 42px; border-radius: 8px;
+      background: #3d8bfd; color: #fff; display: grid; place-items: center;
+      cursor: grab; touch-action: none; font-size: 18px;
+    }
+    .slide-knob:active { cursor: grabbing; }
+    @media (max-width: 760px) {
+      .card { grid-template-columns: 1fr; height: auto; }
+      .art { display: none; }
+      .form { padding: 36px 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="art">
+      <div class="illus">
+        <div class="devices">
+          <div class="monitor"><div class="bubble"></div></div>
+          <div class="phone"><div class="bar b1"></div><div class="bar b2"></div><div class="bar b3"></div></div>
+        </div>
+      </div>
+    </div>
+    <form class="form" id="loginForm">
+      <div class="brand"><div class="logo">CS</div><strong>ONLINE CS</strong></div>
+      <h1>登录 - 在线客服系统</h1>
+      <div class="field">
+        <label>账号 <span>*</span></label>
+        <input id="email" type="text" required placeholder="邮箱或账号" autocomplete="username" inputmode="text" />
+      </div>
+      <div class="field" id="currentWrap">
+        <label id="pwdLabel">密码 <span>*</span></label>
+        <input id="password" type="password" required placeholder="登录密码 长度6~18位字符" autocomplete="current-password" />
+        <button class="eye" type="button" id="togglePwd" aria-label="显示密码">显示</button>
+      </div>
+      <p class="hint" id="changeHint" hidden>重置后的密码只能用来登录。请改成只有自己知道的密码，改完才能进入工作台。</p>
+      <div class="field" id="newWrap" hidden>
+        <label>新密码 <span>*</span></label>
+        <input id="newPassword" type="password" placeholder="至少 6 位，且不能与当前密码相同" autocomplete="new-password" />
+      </div>
+      <div class="field" id="confirmWrap" hidden>
+        <label>确认新密码 <span>*</span></label>
+        <input id="confirmPassword" type="password" placeholder="再输入一次新密码" autocomplete="new-password" />
+      </div>
+      <div class="slide" id="slideBox">
+        <div class="slide-track" id="slideTrack">
+          <div class="slide-fill" id="slideFill"></div>
+          <span class="slide-text" id="slideText">按住滑块，拖到最右边</span>
+          <div class="slide-knob" id="slideKnob" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">→</div>
+        </div>
+      </div>
+      <button class="submit" type="submit" id="btn">立即登录</button>
+      <div class="err" id="err"></div>
+      <div class="links muted-note">坐席由公司后台开通；公司管理员账号由集团总后台配置</div>
+      <div class="links">
+        <a href="/download/">下载坐席 App</a>
+        ·
+        <a href="/download/seat0199-release.apk">安卓</a>
+        ·
+        <a href="/download/Seat0199-unsigned.ipa">iOS(企业签)</a>
+      </div>
+    </form>
+  </div>
+  <script>
+    function homeFor(role) {
+      if (role === "super") return "/platform/";
+      if (role === "company_admin") return "/company/";
+      return "/agent/";
+    }
+    function safeNext(raw) {
+      const allow = ["/platform/", "/company/", "/agent/", "/setting/"];
+      return allow.includes(raw) ? raw : "";
+    }
+    function canOpen(role, dest) {
+      if (!dest) return true;
+      if (dest.startsWith("/platform")) return role === "super";
+      if (dest.startsWith("/company")) return role === "company_admin" || role === "super";
+      if (dest.startsWith("/agent")) return role === "agent" || role === "company_admin" || role === "super";
+      if (dest.startsWith("/setting")) return !!role;
+      return false;
+    }
+    const nextWanted = safeNext(new URLSearchParams(location.search).get("next") || "");
+    let changeMode = false;
+    let knownCurrent = "";
+
+    function detailMessage(j) {
+      const d = j && j.detail;
+      if (typeof d === "string") return d;
+      if (Array.isArray(d)) return d.map((x) => (x && x.msg) || String(x)).join("; ");
+      return "";
+    }
+
+    function showChange(current, user) {
+      changeMode = true;
+      knownCurrent = current || "";
+      document.querySelector("#loginForm h1").textContent = "请先修改密码";
+      document.getElementById("changeHint").hidden = false;
+      document.getElementById("newWrap").hidden = false;
+      document.getElementById("confirmWrap").hidden = false;
+      const email = document.getElementById("email");
+      if (user && user.email) email.value = user.email;
+      email.readOnly = true;
+      if (knownCurrent) {
+        document.getElementById("currentWrap").hidden = true;
+        pwd.required = false;
+      } else {
+        document.getElementById("currentWrap").hidden = false;
+        document.getElementById("pwdLabel").innerHTML = '当前密码 <span>*</span>';
+        pwd.value = "";
+        pwd.required = true;
+        pwd.placeholder = "重置时拿到的密码";
+      }
+      document.getElementById("btn").textContent = "确认修改并进入";
+      document.getElementById("err").textContent = "";
+      document.getElementById("btn").disabled = false;
+      const slideBox = document.getElementById("slideBox");
+      if (slideBox) slideBox.hidden = true;
+    }
+
+    function goHome(user) {
+      const role = (user || {}).role || "";
+      const dest = (nextWanted && canOpen(role, nextWanted)) ? nextWanted : homeFor(role);
+      location.replace(dest);
+    }
+
+    async function boot() {
+      const tok = localStorage.getItem("ocs_token");
+      if (!tok) return;
+      let user = {};
+      try { user = JSON.parse(localStorage.getItem("ocs_user") || "{}"); } catch (_) {}
+      try {
+        const r = await fetch("/v1/auth/me", {
+          headers: { Authorization: "Bearer " + tok },
+          cache: "no-store",
+        });
+        if (r.status === 401) {
+          localStorage.removeItem("ocs_token");
+          localStorage.removeItem("ocs_user");
+          return;
+        }
+        if (r.ok) {
+          const j = await r.json();
+          user = j.user || user;
+          localStorage.setItem("ocs_user", JSON.stringify(user));
+        }
+      } catch (_) {}
+      if (nextWanted && !canOpen(user.role, nextWanted)) {
+        localStorage.removeItem("ocs_token");
+        localStorage.removeItem("ocs_user");
+        document.getElementById("err").textContent = "当前登录的是坐席或公司账号，集团后台请使用集团管理员账号重新登录";
+        return;
+      }
+      goHome(user);
+    }
+    boot();
+    const pwd = document.getElementById("password");
+    document.getElementById("togglePwd").onclick = () => {
+      const show = pwd.type === "password";
+      pwd.type = show ? "text" : "password";
+      document.getElementById("togglePwd").textContent = show ? "隐藏" : "显示";
+    };
+    async function submitChange() {
+      const err = document.getElementById("err");
+      const btn = document.getElementById("btn");
+      const current = knownCurrent || pwd.value;
+      const next = document.getElementById("newPassword").value;
+      const again = document.getElementById("confirmPassword").value;
+      err.textContent = "";
+      if (next.length < 6) { err.textContent = "新密码至少 6 位"; return; }
+      if (next.length > 64) { err.textContent = "新密码最多 64 位"; return; }
+      if (next !== again) { err.textContent = "两次输入的新密码不一致"; return; }
+      if (next === current) { err.textContent = "新密码不能与当前密码相同"; return; }
+      btn.disabled = true;
+      try {
+        const r = await fetch("/v1/auth/change-password", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + (localStorage.getItem("ocs_token") || ""),
+          },
+          body: JSON.stringify({ password: current, newpassword: next }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(detailMessage(j) || "修改失败");
+        if (j.user) localStorage.setItem("ocs_user", JSON.stringify(j.user));
+        goHome(j.user || {});
+      } catch (ex) {
+        err.textContent = ex.message || "修改失败";
+        btn.disabled = false;
+      }
+    }
+
+
+    let slideId = "";
+    let slidePoints = [];
+    let slideSpan = 0;
+    let slideReady = false;
+    let slideDrag = null;
+
+    function resetSlideVisual() {
+      slideReady = false;
+      slidePoints = [];
+      slideSpan = 0;
+      const knob = document.getElementById("slideKnob");
+      const fill = document.getElementById("slideFill");
+      const text = document.getElementById("slideText");
+      const box = document.getElementById("slideBox");
+      if (knob) { knob.style.left = "0px"; knob.setAttribute("aria-valuenow", "0"); }
+      if (fill) fill.style.width = "0px";
+      if (text) text.textContent = "按住滑块，拖到最右边";
+      if (box) box.classList.remove("ok");
+    }
+
+    async function loadSlide() {
+      resetSlideVisual();
+      slideId = "";
+      try {
+        const r = await fetch("/v1/auth/slide", { cache: "no-store" });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.id) {
+          document.getElementById("slideText").textContent = "滑动加载失败，请刷新";
+          return;
+        }
+        slideId = j.id;
+      } catch (_) {
+        document.getElementById("slideText").textContent = "滑动加载失败，请刷新";
+      }
+    }
+
+    function bindSlide() {
+      const track = document.getElementById("slideTrack");
+      const knob = document.getElementById("slideKnob");
+      const fill = document.getElementById("slideFill");
+      const text = document.getElementById("slideText");
+      const box = document.getElementById("slideBox");
+      if (!track || !knob) return;
+
+      function travel() {
+        return Math.max(80, track.clientWidth - knob.offsetWidth);
+      }
+
+      function pushPoint(ev, originY, t0, xPos) {
+        const t = Math.max(0, Math.round(performance.now() - t0));
+        const y = Math.round((ev.clientY || 0) - originY);
+        const last = slidePoints[slidePoints.length - 1];
+        if (last && t - last.t < 8 && Math.abs(xPos - last.x) < 2 && Math.abs(y - last.y) < 2) return;
+        slidePoints.push({ x: xPos, y: y, t: t });
+        if (slidePoints.length > 80) slidePoints.splice(1, slidePoints.length - 60);
+      }
+
+      function place(xPos) {
+        const max = slideDrag ? slideDrag.max : travel();
+        const x = Math.max(0, Math.min(max, Math.round(xPos)));
+        knob.style.left = x + "px";
+        fill.style.width = (x + knob.offsetWidth / 2) + "px";
+        knob.setAttribute("aria-valuenow", String(Math.round(x / Math.max(1, max) * 100)));
+        return x;
+      }
+
+      function unhook() {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+      }
+
+      function onDown(ev) {
+        if (changeMode || !slideId || slideDrag) return;
+        if (ev.target !== knob) return;
+        if (ev.button != null && ev.button !== 0) return;
+        ev.preventDefault();
+        const max = travel();
+        const rect = track.getBoundingClientRect();
+        slideDrag = { t0: performance.now(), originY: ev.clientY, max: max };
+        slideReady = false;
+        slidePoints = [];
+        slideSpan = max;
+        box.classList.remove("ok");
+        text.textContent = "拖到最右边";
+        const xPos = place(ev.clientX - rect.left - knob.offsetWidth / 2);
+        try { knob.setPointerCapture(ev.pointerId); } catch (_) {}
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
+        pushPoint(ev, ev.clientY, slideDrag.t0, xPos);
+      }
+
+      function onMove(ev) {
+        if (!slideDrag) return;
+        ev.preventDefault();
+        const rect = track.getBoundingClientRect();
+        const xPos = place(ev.clientX - rect.left - knob.offsetWidth / 2);
+        pushPoint(ev, slideDrag.originY, slideDrag.t0, xPos);
+      }
+
+      function onUp(ev) {
+        if (!slideDrag) return;
+        const drag = slideDrag;
+        const rect = track.getBoundingClientRect();
+        const xPos = place(ev.clientX - rect.left - knob.offsetWidth / 2);
+        pushPoint(ev, drag.originY, drag.t0, xPos);
+        slideDrag = null;
+        unhook();
+        if (xPos >= drag.max * 0.9 && slidePoints.length >= 6) {
+          slideReady = true;
+          slideSpan = drag.max;
+          place(drag.max);
+          const last = slidePoints[slidePoints.length - 1];
+          if (last) last.x = drag.max;
+          text.textContent = "滑动完成，请登录";
+          box.classList.add("ok");
+          return;
+        }
+        resetSlideVisual();
+        text.textContent = xPos >= drag.max * 0.9 ? "请再慢慢拖一次" : "请拖到最右边";
+      }
+
+      track.addEventListener("pointerdown", onDown);
+    }
+
+    bindSlide();
+    loadSlide();
+
+    document.getElementById("loginForm").onsubmit = async (e) => {
+      e.preventDefault();
+      if (changeMode) { await submitChange(); return; }
+      const err = document.getElementById("err");
+      const btn = document.getElementById("btn");
+      err.textContent = "";
+      btn.disabled = true;
+      try {
+        if (!slideReady || !slideId || slidePoints.length < 6) {
+          err.textContent = "请按住滑块拖到最右边";
+          return;
+        }
+        const r = await fetch("/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: document.getElementById("email").value.trim(),
+            password: pwd.value,
+            slide: { id: slideId, span: slideSpan, points: slidePoints },
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok || !j.token) {
+          const d = j.detail;
+          const msg = typeof d === "string" ? d
+            : Array.isArray(d) ? d.map((x) => (x && x.msg) || String(x)).join("; ")
+            : (d || j.text || "登录失败");
+          throw new Error(msg);
+        }
+        const role = (j.user || {}).role || "";
+        if (nextWanted && !canOpen(role, nextWanted)) {
+          throw new Error("该账号无权进入该后台，请使用对应的管理员账号登录");
+        }
+        localStorage.setItem("ocs_token", j.token);
+        localStorage.setItem("ocs_user", JSON.stringify(j.user || {}));
+        location.href = nextWanted || j.redirect || homeFor(role);
+      } catch (ex) {
+        err.textContent = ex.message || "登录失败";
+        loadSlide();
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <title>坐席工作台 · 在线客服</title>
+  <link rel="stylesheet" href="./styles.css?v=side20261014c" />
+</head>
+<body>
+  <div class="app">
+    <div class="sound-bar" id="soundBar" hidden>
+      <span>收到新消息将循环播放提示音；无未读或点击停止后结束。</span>
+      <button type="button" id="enableSoundBtn">启用声音提醒</button>
+    </div>
+    <header class="topbar">
+      <div class="left"><div class="logo">CS</div><span>ONLINE CS 工作台</span></div>
+      <div class="right">
+        <span id="agentName">坐席</span>
+        <button type="button" class="nick-edit-btn" id="btnEditNick" title="修改访客可见昵称">改昵称</button>
+        <label class="welcome-switch" title="访客进线时自动发送第一句欢迎语">
+          <input type="checkbox" id="autoWelcomeToggle" />
+          <span>欢迎语</span>
+        </label>
+        <a class="welcome-edit" id="autoWelcomeEdit" href="/setting/auto/" title="编辑欢迎词">编辑</a>
+        <a class="welcome-edit" href="/setting/keyword/" title="状态为忙碌或离线时，访客消息含关键词会自动回复">关键词</a>
+        <label class="status-wrap" title="在线：自己回复。忙碌或离线：关键词自动回复">
+          <span>在线状态</span>
+          <select class="status-select" id="agentStatus">
+            <option value="online">在线</option>
+            <option value="busy">忙碌</option>
+            <option value="away">离线</option>
+          </select>
+        </label>
+        <a class="welcome-edit" href="/download/" title="下载坐席 App">下载App</a>
+        <button type="button" id="logoutBtn" style="border:1px solid #e5e7eb;background:#fff;border-radius:6px;padding:4px 10px;cursor:pointer">退出</button>
+      </div>
+    </header>
+    <div class="main">
+      <nav class="rail">
+        <a href="#" class="active" data-nav="chat" title="会话">会话</a>
+        <a href="#" data-nav="visitor" title="访客">访客</a>
+        <a href="#" data-nav="customer" title="客户">客户</a>
+        <a href="#" data-nav="dashboard" title="数据">数据</a>
+        <a href="#" data-nav="setting" title="设置">设置</a>
+      </nav>
+      <aside class="sessions">
+        <div class="tabs">
+          <button type="button" class="active" data-tab="open" id="openTabBtn">当前<span class="tab-badge" id="openBadge" hidden>0</span></button>
+          <button type="button" data-tab="queue" id="queueTabBtn" hidden>排队<span class="tab-badge" id="queueBadge" hidden>0</span></button>
+          <button type="button" data-tab="history">历史</button>
+        </div>
+        <div class="search"><input id="q" placeholder="搜索访客 / 内容" /></div>
+        <div class="bulk-bar" id="bulkBar" hidden>
+          <button type="button" id="btnBulk">群发</button>
+        </div>
+        <div class="bulk-panel" id="bulkPanel" hidden>
+          <textarea id="bulkText" maxlength="4000" placeholder="输入要群发的消息"></textarea>
+          <div class="bulk-actions">
+            <button type="button" id="bulkSelectPage">全选本页</button>
+            <button type="button" id="bulkClear">清空</button>
+            <button type="button" id="bulkSendIds">发送勾选</button>
+            <button type="button" id="bulkSendOpen">发给全部当前</button>
+            <button type="button" id="bulkCancel">取消</button>
+          </div>
+          <p class="bulk-hint" id="bulkHint">已选 0 个</p>
+          <p class="bulk-err" id="bulkErr"></p>
+        </div>
+        <div class="visitor-list-hint" id="visitorListHint" hidden>访客明细 · 点击查看来源 / IP / 时间 / 聊天记录</div>
+        <div class="list" id="sessionList"></div>
+        <div class="session-pager" id="sessionPager" hidden>
+          <button type="button" id="pagerPrev">上一页</button>
+          <span id="pagerInfo">1 / 1</span>
+          <button type="button" id="pagerNext">下一页</button>
+        </div>
+      </aside>
+      <section class="chat" id="chatPane">
+        <div id="dashView" hidden style="padding:20px;overflow:auto;height:100%">
+          <h2 style="margin:0 0 8px;font-size:18px">数据看板</h2>
+          <p style="margin:0 0 16px;color:#64748b;font-size:13px" id="dashDay">今日数据</p>
+          <div id="dashCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px"></div>
+        </div>
+        <div class="empty" id="chatEmpty">请选择左侧会话开始接待</div>
+        <div id="visitorView" hidden>
+          <div class="visitor-detail" id="visitorDetail"></div>
+          <div class="visitor-chat-head">聊天记录</div>
+          <div class="msgs" id="visitorMsgs"></div>
+          <div class="visitor-actions">
+            <button type="button" class="send" id="btnEnterChat">进入会话接待</button>
+          </div>
+        </div>
+        <div id="chatActive" hidden>
+          <div class="chat-head">
+            <div class="chat-head-main">
+              <div class="title-row">
+                <div class="title" id="chatTitle">-</div>
+                <button type="button" class="remark-edit-btn" id="btnEditRemark" title="填写备注，方便区分访客">备注</button>
+              </div>
+              <div class="remark-edit" id="remarkEditBox" hidden>
+                <input type="text" id="remarkInput" maxlength="40" placeholder="例如：澳门A / 老客户张三" />
+                <button type="button" class="remark-save" id="btnSaveRemark">保存</button>
+                <button type="button" class="remark-cancel" id="btnCancelRemark">取消</button>
+              </div>
+              <div class="sub" id="chatSub">-</div>
+            </div>
+            <div class="actions">
+              <button type="button" id="btnAccept">接入</button>
+              <button type="button" id="btnTransfer">转接</button>
+              <button type="button" class="danger" id="btnClose">结束会话</button>
+            </div>
+          </div>
+          <div class="msgs" id="msgs"></div>
+          <div id="historyReadonlyTip" class="history-readonly" hidden>历史会话可继续回复，发送后将回到「当前」</div>
+          <div class="composer">
+            <div class="tools">
+              <button type="button" id="btnEmoji">表情</button>
+              <button type="button" id="btnImage">图片</button>
+              <button type="button" id="btnFile">文件</button>
+              <input type="file" id="imageInput" accept="image/*" hidden />
+              <input type="file" id="fileInput" hidden />
+            </div>
+            <div class="emoji-panel" id="emojiPanel" hidden></div>
+            <div class="paste-preview" id="pastePreview" hidden>
+              <img id="pastePreviewImg" alt="待发送图片" />
+              <div class="meta"><b>待发送图片</b>粘贴成功，点击发送后发出</div>
+              <button type="button" id="pastePreviewClear" title="移除">×</button>
+            </div>
+            <div class="composer-row">
+              <textarea id="input" placeholder="输入回复，可粘贴图片后点发送；Enter 发送，Shift+Enter 换行"></textarea>
+              <button class="send" type="button" id="sendBtn">发送</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <aside class="side">
+        <div class="tabs">
+          <button type="button" class="active" data-side="profile">资料</button>
+          <button type="button" data-side="trail">轨迹</button>
+          <button type="button" data-side="quick">快捷回复</button>
+        </div>
+        <div class="side-body" id="sideBody"></div>
+      </aside>
+    </div>
+  </div>
+  <dialog id="transferDlg">
+    <form method="dialog" id="transferForm" style="min-width:280px">
+      <h3 style="margin:0 0 10px">转接给同事</h3>
+      <select id="transferTo" style="width:100%;height:40px;margin-bottom:12px"></select>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="transferCancel">取消</button>
+        <button type="submit" id="transferOk">确认转接</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="./app.js?v=live20261017b"></script>
+</body>
+</html>
