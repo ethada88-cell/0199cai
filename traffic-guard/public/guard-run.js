@@ -613,8 +613,9 @@
     // 尺寸交给 JS（visualViewport）；外壳透明；只有中间面板接收点击。
     style.textContent = [
       "html[data-tg-gate='1'] iframe{pointer-events:none !important;}",
+      /* 绝不写 inset/100svh：透明 fixed 层一旦盖住 Safari 底栏，毛玻璃会变成实心白条 */
       "#tg-gate{position:fixed;z-index:2147483647;display:flex;align-items:center;justify-content:center;box-sizing:border-box;margin:0;padding:0;border:0;background:transparent !important;pointer-events:none;}",
-      "#tg-gate-dim{position:absolute;left:0;right:0;top:0;background:rgba(15,23,32,.45);pointer-events:none;}",
+      "#tg-gate-dim{position:absolute;inset:0;background:rgba(15,23,32,.45);pointer-events:none;}",
       "#tg-gate-panel{position:relative;z-index:1;pointer-events:auto;}"
     ].join("");
     var overlay = document.createElement("div");
@@ -669,7 +670,7 @@
     }
 
     function fitViewport() {
-      // 贴合 visualViewport；底部留空给 Safari 地址栏毛玻璃（页面内容要露出来）。
+      // 贴合 visualViewport；底部整条不放任何节点（含透明层），否则 Safari 底栏变实心白。
       var vv = global.visualViewport;
       var top = 0;
       var left = 0;
@@ -684,17 +685,17 @@
         var ua = String((global.navigator && global.navigator.userAgent) || "");
         apple = /iPhone|iPad|iPod/i.test(ua) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
       } catch (eApple) {}
-      // Safari 底栏叠在可视区底部：遮罩与变暗层都要上收，不能涂到这一带。
-      var clearBottom = apple ? 64 : 0;
+      var clearBottom = apple ? 100 : 0;
       try {
         var layoutH = Math.round((document.documentElement && document.documentElement.clientHeight) || global.innerHeight || 0);
-        if (layoutH > h) clearBottom = Math.max(clearBottom, Math.min(88, layoutH - h));
+        var layoutGap = layoutH - (top + h);
+        if (layoutGap > 0) clearBottom = Math.max(clearBottom, Math.min(140, layoutGap + 12));
       } catch (eClear) {}
       try {
         var gap = Math.round((global.innerHeight || 0) - h - top);
-        if (gap > 0) clearBottom = Math.max(clearBottom, Math.min(88, gap));
+        if (gap > 0) clearBottom = Math.max(clearBottom, Math.min(140, gap + 12));
       } catch (eGap) {}
-      if (apple && clearBottom < 72) clearBottom = 72;
+      if (apple && clearBottom < 110) clearBottom = 110;
       var useH = Math.max(160, h - clearBottom);
       setImp(overlay, "top", top + "px");
       setImp(overlay, "left", left + "px");
@@ -708,13 +709,12 @@
       setImp(overlay, "pointer-events", "none");
       setImp(overlay, "transform", "none");
       setImp(overlay, "-webkit-transform", "none");
-      // 变暗层高度短一截，底部整条留给页面 + Safari 毛玻璃。
-      var dimH = Math.max(120, useH - (apple ? 12 : 0));
+      // 变暗层只铺满遮罩盒，绝不单独加高伸出底部留白。
       setImp(dim, "top", "0");
       setImp(dim, "left", "0");
       setImp(dim, "right", "0");
-      setImp(dim, "bottom", "auto");
-      setImp(dim, "height", dimH + "px");
+      setImp(dim, "bottom", "0");
+      setImp(dim, "height", "auto");
       setImp(panel, "pointer-events", "auto");
     }
 
@@ -964,16 +964,14 @@
         event.stopPropagation();
         return;
       }
-      // 绝不拦截 touch/wheel：否则页面拉动会停，底部毛玻璃也没有滚动内容可透。
-      if (event.type === "touchstart" || event.type === "touchmove" || event.type === "touchend" || event.type === "wheel" || event.type === "scroll") return;
       var target = event.target;
       if (target && (target === panel || panel.contains(target))) return;
-      // 只拦页面点击，避免未滑过就点站内按钮。
+      // 只拦 click：绝不能对 pointerdown/touch 调 preventDefault，否则 iOS 滚不动，Safari 底栏透不出内容。
       event.preventDefault();
       event.stopPropagation();
     }
 
-    var holdNames = ["click", "mousedown", "mouseup", "pointerdown", "keydown", "keyup", "contextmenu", "auxclick"];
+    var holdNames = ["click", "auxclick", "contextmenu", "keydown", "keyup"];
     holdNames.forEach(function (name) {
       document.addEventListener(name, hold, true);
     });
