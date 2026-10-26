@@ -1,0 +1,13 @@
+用 Git 打包 0199 App
+
+1) 提交源码后执行：
+   bash online-cs/deploy/mobile/scripts/git-pack.sh
+
+2) 产物目录：
+   online-cs/deploy/mobile/dist/
+
+3) 安装包：
+   - Android：dist/app0199-release.apk 、 dist/seat0199-release.apk
+   - iOS：需 Mac 打开 ios/*/…xcodeproj 再 Archive（Linux 打不出已签名 IPA）
+
+4) GitHub：仓库创建后用 Code → Download ZIP，或 clone 后跑上面脚本。

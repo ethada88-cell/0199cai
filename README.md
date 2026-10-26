@@ -7,6 +7,8 @@
 - 控制台: https://cs.ojy0871.com/login/
 - 访客聊天: `https://{子域}.ojy0871.com/c/{slug}/`
 - API: `127.0.0.1:8088`（`online-cs-api.service`）
+- 0199 原生壳（Git 打包）: `online-cs/deploy/mobile/` — `bash online-cs/deploy/mobile/scripts/git-pack.sh`
+- APK: `online-cs/deploy/mobile/dist/app0199-release.apk`、`seat0199-release.apk`
 
 ## fenliuqi / 线路台
 
