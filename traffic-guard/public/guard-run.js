@@ -3,6 +3,65 @@
   global.__tgRun = true;
   // 与 lib/detect-flags.ts 对应。某项改 false 即停采集，服务端开关仍可单独关掉计分。
   var FLAGS = { nativeHook: true, audio: true, fonts: true, behavior: true, pow: true };
+
+  function isAppleTouch() {
+    try {
+      var ua = String((global.navigator && global.navigator.userAgent) || "");
+      return /iPhone|iPad|iPod/i.test(ua) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 清掉旧版留下的 fixed/遮罩（即使透明也会让 Safari 底栏失去毛玻璃）
+  function nukeGateDom() {
+    try {
+      global.__tgGate = false;
+      global.__tgOpen = false;
+    } catch (e0) {}
+    try {
+      var ids = ["tg-gate", "tg-gate-dim", "tg-gate-panel", "tg-gate-style"];
+      for (var i = 0; i < ids.length; i += 1) {
+        var el = document.getElementById(ids[i]);
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      }
+    } catch (e1) {}
+    try {
+      var root = document.documentElement;
+      if (root) {
+        root.removeAttribute("data-tg-gate");
+        root.removeAttribute("data-tg-apple");
+        root.style.removeProperty("overflow");
+        root.style.removeProperty("position");
+        root.style.removeProperty("height");
+        root.style.removeProperty("width");
+        root.style.removeProperty("touch-action");
+      }
+      if (document.body) {
+        document.body.style.removeProperty("overflow");
+        document.body.style.removeProperty("position");
+        document.body.style.removeProperty("height");
+        document.body.style.removeProperty("touch-action");
+      }
+    } catch (e2) {}
+  }
+
+  if (isAppleTouch()) {
+    nukeGateDom();
+    try {
+      global.addEventListener("pageshow", function () { nukeGateDom(); });
+    } catch (ePs) {}
+    // 旧脚本若仍在跑，短时间内反复清掉遮罩层
+    try {
+      var sweeps = 0;
+      var sweepTimer = global.setInterval(function () {
+        nukeGateDom();
+        sweeps += 1;
+        if (sweeps >= 40) global.clearInterval(sweepTimer);
+      }, 200);
+    } catch (eSw) {}
+  }
+
   function ownScript() {
     if (document.currentScript) return document.currentScript;
     var nodes = document.getElementsByTagName("script");
@@ -574,15 +633,6 @@
   }
 
   var tucked = [];
-
-  function isAppleTouch() {
-    try {
-      var ua = String((global.navigator && global.navigator.userAgent) || "");
-      return /iPhone|iPad|iPod/i.test(ua) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
-    } catch (e) {
-      return false;
-    }
-  }
 
   function tuckFrames() {
     // 只禁点击，不隐藏：隐藏 iframe 会让 iOS Safari 底栏透出白底，不像系统地址栏毛玻璃。

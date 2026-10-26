@@ -13,6 +13,30 @@
     var started = false;
     var enteredAt = Date.now();
     var DELAY_MS = 2000;
+    var apple = false;
+    try {
+      var uaBoot = String((global.navigator && global.navigator.userAgent) || "");
+      apple = /iPhone|iPad|iPod/i.test(uaBoot) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
+    } catch (eAppleBoot) {}
+
+    // 进站立刻清掉旧版遮罩残留（Safari 毛玻璃）
+    if (apple) {
+      try {
+        var killIds = ["tg-gate", "tg-gate-dim", "tg-gate-panel", "tg-gate-style"];
+        for (var ki = 0; ki < killIds.length; ki += 1) {
+          var killEl = document.getElementById(killIds[ki]);
+          if (killEl && killEl.parentNode) killEl.parentNode.removeChild(killEl);
+        }
+        if (document.documentElement) {
+          document.documentElement.removeAttribute("data-tg-gate");
+          document.documentElement.removeAttribute("data-tg-apple");
+          document.documentElement.style.removeProperty("overflow");
+        }
+        if (document.body) document.body.style.removeProperty("overflow");
+        global.__tgGate = false;
+        global.__tgOpen = false;
+      } catch (eKill) {}
+    }
 
     function start() {
       if (started || global.__tgRun) return;
@@ -20,8 +44,8 @@
       var node = document.createElement("script");
       node.async = true;
       node.defer = true;
-      // 版本参数避免站点/CDN 继续用旧的不透明遮罩脚本
-      node.src = origin + "/guard-run.js?v=20261027j";
+      // 版本 + 苹果端时间戳：强制绕过缓存的旧遮罩脚本
+      node.src = origin + "/guard-run.js?v=20261027k" + (apple ? "&ios=1&t=" + Date.now() : "");
       try { node.setAttribute("fetchpriority", "low"); } catch (e) {}
       if (account) node.setAttribute("data-account", account);
       if (preview) node.setAttribute("data-preview", preview);
