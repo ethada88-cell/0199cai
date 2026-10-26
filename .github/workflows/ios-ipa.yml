@@ -57,6 +57,12 @@ jobs:
 
       - name: Select project
         id: sel
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           case "${{ matrix.app }}" in
             app0199)
@@ -76,7 +82,22 @@ jobs:
               exit 1
               ;;
           esac
-          if [ "${{ inputs.export_method }}" = "development" ]; then
+
+          METHOD="${{ inputs.export_method }}"
+          # No Apple secrets → force unsigned (企业签). Avoids ad-hoc/re-run failures.
+          if [ "$METHOD" != "unsigned" ]; then
+            for k in IOS_CERTIFICATE_P12_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROVISION_PROFILE_BASE64 IOS_TEAM_ID KEYCHAIN_PASSWORD; do
+              if [ -z "${!k}" ]; then
+                echo "::warning::Secret $k missing — falling back to unsigned IPA for 企业签"
+                METHOD=unsigned
+                break
+              fi
+            done
+          fi
+          echo "method=$METHOD" >> "$GITHUB_OUTPUT"
+          echo "Effective export method: $METHOD"
+
+          if [ "$METHOD" = "development" ]; then
             echo "sign_identity=Apple Development" >> "$GITHUB_OUTPUT"
           else
             echo "sign_identity=Apple Distribution" >> "$GITHUB_OUTPUT"
@@ -87,7 +108,7 @@ jobs:
 
       # ---------- unsigned (企业签) ----------
       - name: Build unsigned .app
-        if: inputs.export_method == 'unsigned'
+        if: steps.sel.outputs.method == 'unsigned'
         run: |
           BUILD_DIR="$RUNNER_TEMP/ios-build"
           mkdir -p "$BUILD_DIR"
@@ -117,7 +138,7 @@ jobs:
           ls -la "$APP"
 
       - name: Package unsigned IPA
-        if: inputs.export_method == 'unsigned'
+        if: steps.sel.outputs.method == 'unsigned'
         run: |
           STAGE="$RUNNER_TEMP/ipa-stage"
           rm -rf "$STAGE"
@@ -134,7 +155,7 @@ jobs:
 
       # ---------- signed (ad-hoc / development) ----------
       - name: Require signing secrets
-        if: inputs.export_method != 'unsigned'
+        if: steps.sel.outputs.method != 'unsigned'
         env:
           IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
@@ -152,7 +173,7 @@ jobs:
           exit "$missing"
 
       - name: Import certificate and provisioning profile
-        if: inputs.export_method != 'unsigned'
+        if: steps.sel.outputs.method != 'unsigned'
         env:
           IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
@@ -182,7 +203,7 @@ jobs:
           echo "Imported profile: $NAME ($UUID)"
 
       - name: Write export options
-        if: inputs.export_method != 'unsigned'
+        if: steps.sel.outputs.method != 'unsigned'
         env:
           OUT: ${{ runner.temp }}/ExportOptions.plist
           METHOD: ${{ inputs.export_method }}
@@ -230,7 +251,7 @@ jobs:
           echo "EXPORT_OPTIONS=$OUT" >> "$GITHUB_ENV"
 
       - name: Archive signed
-        if: inputs.export_method != 'unsigned'
+        if: steps.sel.outputs.method != 'unsigned'
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
@@ -250,7 +271,7 @@ jobs:
             archive
 
       - name: Export signed IPA
-        if: inputs.export_method != 'unsigned'
+        if: steps.sel.outputs.method != 'unsigned'
         run: |
           EXPORT_DIR="$RUNNER_TEMP/ipa-out"
           mkdir -p "$EXPORT_DIR"
@@ -267,7 +288,7 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.sel.outputs.ipa_name }}-${{ inputs.export_method }}-ipa
+          name: ${{ steps.sel.outputs.ipa_name }}-${{ steps.sel.outputs.method }}-ipa
           path: ${{ env.IPA_FILE }}
           if-no-files-found: error
           retention-days: 14
