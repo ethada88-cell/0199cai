@@ -670,46 +670,42 @@
     }
 
     function fitViewport() {
-      // 贴合 visualViewport；底部整条不放任何节点（含透明层），否则 Safari 底栏变实心白。
+      // iPhone Safari：position:fixed 已相对 visual viewport。
+      // 再加 offsetTop 会把遮罩整体下移，底边盖进地址栏 → 毛玻璃变实心白条。
       var vv = global.visualViewport;
-      var top = 0;
-      var left = 0;
-      var w = Math.max(1, Math.round((vv && vv.width) || global.innerWidth || 0));
       var h = Math.max(1, Math.round((vv && vv.height) || global.innerHeight || 0));
-      if (vv) {
-        top = Math.round(vv.offsetTop || 0);
-        left = Math.round(vv.offsetLeft || 0);
-      }
       var apple = false;
       try {
         var ua = String((global.navigator && global.navigator.userAgent) || "");
+        // 苹果自带 Safari / WebKit；不含 CriOS（Chrome）时也按苹果底栏处理
         apple = /iPhone|iPad|iPod/i.test(ua) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
       } catch (eApple) {}
-      var clearBottom = apple ? 100 : 0;
-      try {
-        var layoutH = Math.round((document.documentElement && document.documentElement.clientHeight) || global.innerHeight || 0);
-        var layoutGap = layoutH - (top + h);
-        if (layoutGap > 0) clearBottom = Math.max(clearBottom, Math.min(140, layoutGap + 12));
-      } catch (eClear) {}
-      try {
-        var gap = Math.round((global.innerHeight || 0) - h - top);
-        if (gap > 0) clearBottom = Math.max(clearBottom, Math.min(140, gap + 12));
-      } catch (eGap) {}
-      if (apple && clearBottom < 110) clearBottom = 110;
-      var useH = Math.max(160, h - clearBottom);
-      setImp(overlay, "top", top + "px");
-      setImp(overlay, "left", left + "px");
-      setImp(overlay, "right", "auto");
-      setImp(overlay, "bottom", "auto");
-      setImp(overlay, "width", w + "px");
-      setImp(overlay, "height", useH + "px");
-      setImp(overlay, "max-height", useH + "px");
+      var clearBottom = 0;
+      if (apple) {
+        clearBottom = 120;
+        try {
+          var gap = Math.round((global.innerHeight || 0) - h);
+          if (gap > 0) clearBottom = Math.max(clearBottom, Math.min(168, gap + 16));
+        } catch (eGap) {}
+        try {
+          var layoutH = Math.round((document.documentElement && document.documentElement.clientHeight) || 0);
+          var layoutGap = layoutH - h;
+          if (layoutGap > 0) clearBottom = Math.max(clearBottom, Math.min(168, layoutGap + 16));
+        } catch (eClear) {}
+      }
+      setImp(overlay, "top", "0");
+      setImp(overlay, "left", "0");
+      setImp(overlay, "right", "0");
+      setImp(overlay, "width", "auto");
+      setImp(overlay, "bottom", clearBottom + "px");
+      setImp(overlay, "height", "auto");
+      setImp(overlay, "max-height", "none");
       setImp(overlay, "background", "transparent");
       setImp(overlay, "padding", "0");
       setImp(overlay, "pointer-events", "none");
       setImp(overlay, "transform", "none");
       setImp(overlay, "-webkit-transform", "none");
-      // 变暗层只铺满遮罩盒，绝不单独加高伸出底部留白。
+      // 变暗层只铺满遮罩盒，绝不伸出底部留白带。
       setImp(dim, "top", "0");
       setImp(dim, "left", "0");
       setImp(dim, "right", "0");
@@ -725,7 +721,8 @@
 
     function mount() {
       if (!global.__tgOpen) return;
-      var parent = root;
+      // 挂 body：Safari 对 html 根上的 fixed 层更容易盖进底栏。
+      var parent = document.body || root;
       if (!style.isConnected) (document.head || root).appendChild(style);
       if (!overlay.isConnected || overlay.parentNode !== parent) parent.appendChild(overlay);
       if (parent.lastElementChild !== overlay) parent.appendChild(overlay);
