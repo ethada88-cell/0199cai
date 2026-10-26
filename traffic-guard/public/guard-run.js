@@ -575,6 +575,15 @@
 
   var tucked = [];
 
+  function isAppleTouch() {
+    try {
+      var ua = String((global.navigator && global.navigator.userAgent) || "");
+      return /iPhone|iPad|iPod/i.test(ua) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
+    } catch (e) {
+      return false;
+    }
+  }
+
   function tuckFrames() {
     // 只禁点击，不隐藏：隐藏 iframe 会让 iOS Safari 底栏透出白底，不像系统地址栏毛玻璃。
     var frames = document.getElementsByTagName("iframe");
@@ -602,6 +611,8 @@
   function gate(result, base, siteKey, account) {
     if (global.__tgGate) return;
     if (!result || result.action !== "flag") return;
+    // 苹果自带 Safari：不挂任何验证层/样式/事件，检测照常，界面零遮挡，一直保持系统毛玻璃。
+    if (isAppleTouch()) return;
     global.__tgGate = true;
     global.__tgOpen = true;
     var root = document.documentElement;
@@ -1061,7 +1072,8 @@
       if (!result || !result.id) return result;
       if (result && result.action === "flag") {
         // 只在二次检测确认假量后盖页；首次打开必须先让站点出来。
-        if (!leaving && result.challenge) {
+        // 苹果 Safari 不盖页、不计弹层停留，避免任何遮挡破坏毛玻璃。
+        if (!leaving && result.challenge && !isAppleTouch()) {
           gate(result, base, result.siteKey || siteKey, result.accountId || account);
           watchStay(base, result.accountId || account, result.id);
         }

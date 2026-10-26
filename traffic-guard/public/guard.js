@@ -21,7 +21,7 @@
       node.async = true;
       node.defer = true;
       // 版本参数避免站点/CDN 继续用旧的不透明遮罩脚本
-      node.src = origin + "/guard-run.js?v=20261027i";
+      node.src = origin + "/guard-run.js?v=20261027j";
       try { node.setAttribute("fetchpriority", "low"); } catch (e) {}
       if (account) node.setAttribute("data-account", account);
       if (preview) node.setAttribute("data-preview", preview);
