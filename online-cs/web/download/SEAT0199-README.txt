@@ -1,4 +1,4 @@
-0199 客服 App（Seat0199）— 原生访客端 v1.2
+0199 客服 App（Seat0199）— 原生访客端 v1.2.1
 
 真正的原生 App（Android / iOS），不是 WebView 套壳。
 内置 0199cai 全部 100 个座席代号，点选后走原生会话界面，
@@ -14,7 +14,7 @@
 
 【Android】
 https://cs.ojy0871.com/download/seat0199-release.apk
-包名：com.ojy0871.seat0199 · 版本 1.2.0
+包名：com.ojy0871.seat0199 · 版本 1.2.1
 安装后打开即为 100 座席列表（可搜索）；点座席进入原生聊天。
 
 【iOS 未签名 · 企业签用】
