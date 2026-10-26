@@ -606,20 +606,16 @@
     global.__tgOpen = true;
     var root = document.documentElement;
     try { root.setAttribute("data-tg-gate", "1"); } catch (e) {}
-    var htmlOverflow = root.style.overflow;
-    var bodyOverflow = document.body ? document.body.style.overflow : "";
-    root.style.overflow = "hidden";
-    if (document.body) document.body.style.overflow = "hidden";
+    // 不锁 html/body overflow、不拦 touch：否则页面拉不动，Safari 底栏也透不出滚动内容。
 
     var style = document.createElement("style");
     style.id = "tg-gate-style";
-    // 遮罩外壳透明；变暗层由 #tg-gate-dim 负责，并避开底部，留给 iOS Safari 地址栏毛玻璃透出页面。
+    // 尺寸交给 JS（visualViewport）；外壳透明；只有中间面板接收点击。
     style.textContent = [
       "html[data-tg-gate='1'] iframe{pointer-events:none !important;}",
-      "html[data-tg-gate='1'],html[data-tg-gate='1'] body{overscroll-behavior:none !important;}",
-      "#tg-gate{position:fixed !important;top:0 !important;left:0 !important;right:auto !important;bottom:auto !important;z-index:2147483647 !important;display:flex !important;align-items:center !important;justify-content:center !important;box-sizing:border-box !important;width:100% !important;width:100vw !important;height:100% !important;height:100svh !important;max-height:100svh !important;margin:0 !important;padding:0 !important;border:0 !important;background:transparent !important;-webkit-transform:translateZ(0);transform:translateZ(0);}",
-      "#tg-gate-dim{position:absolute !important;left:0 !important;right:0 !important;top:0 !important;bottom:0 !important;background:rgba(15,23,32,.55) !important;pointer-events:none !important;}",
-      "#tg-gate > *:not(#tg-gate-dim){position:relative;z-index:1;}"
+      "#tg-gate{position:fixed;z-index:2147483647;display:flex;align-items:center;justify-content:center;box-sizing:border-box;margin:0;padding:0;border:0;background:transparent !important;pointer-events:none;}",
+      "#tg-gate-dim{position:absolute;left:0;right:0;top:0;background:rgba(15,23,32,.45);pointer-events:none;}",
+      "#tg-gate-panel{position:relative;z-index:1;pointer-events:auto;}"
     ].join("");
     var overlay = document.createElement("div");
     overlay.id = "tg-gate";
@@ -632,7 +628,8 @@
     dim.setAttribute("aria-hidden", "true");
 
     var panel = document.createElement("div");
-    panel.setAttribute("style", "width:min(360px,calc(100% - 32px));max-height:min(80svh,520px);overflow:auto;background:#fff;border-radius:8px;padding:28px 24px 22px;box-shadow:0 12px 40px rgba(0,0,0,.2);text-align:center;font-family:PingFang SC,Microsoft YaHei,sans-serif;flex-shrink:0;");
+    panel.id = "tg-gate-panel";
+    panel.setAttribute("style", "width:min(360px,calc(100% - 32px));max-height:min(70svh,520px);overflow:auto;background:#fff;border-radius:8px;padding:28px 24px 22px;box-shadow:0 12px 40px rgba(0,0,0,.2);text-align:center;font-family:PingFang SC,Microsoft YaHei,sans-serif;flex-shrink:0;");
 
     var title = document.createElement("div");
     title.textContent = "访问确认";
@@ -667,8 +664,12 @@
     overlay.appendChild(dim);
     overlay.appendChild(panel);
 
+    function setImp(el, name, value) {
+      try { el.style.setProperty(name, value, "important"); } catch (eSet) { el.style[name] = value; }
+    }
+
     function fitViewport() {
-      // 贴合 visualViewport，并在底部留出透明带，避免涂黑 Safari 地址栏后方。
+      // 贴合 visualViewport；底部留空给 Safari 地址栏毛玻璃（页面内容要露出来）。
       var vv = global.visualViewport;
       var top = 0;
       var left = 0;
@@ -678,34 +679,43 @@
         top = Math.round(vv.offsetTop || 0);
         left = Math.round(vv.offsetLeft || 0);
       }
-      // 预留底部透明带：iOS Safari 地址栏叠在页面上方，遮罩不能涂到那一带，否则毛玻璃透不出站内容。
-      var clearBottom = 0;
-      try {
-        var layoutH = Math.round((document.documentElement && document.documentElement.clientHeight) || global.innerHeight || 0);
-        if (layoutH > h) clearBottom = Math.min(72, layoutH - h);
-      } catch (eClear) {}
-      if (clearBottom < 12) {
-        try {
-          var gap = Math.round((global.innerHeight || 0) - h - top);
-          if (gap > 0) clearBottom = Math.min(72, Math.max(clearBottom, gap));
-        } catch (eGap) {}
-      }
       var apple = false;
       try {
         var ua = String((global.navigator && global.navigator.userAgent) || "");
         apple = /iPhone|iPad|iPod/i.test(ua) || (global.navigator.platform === "MacIntel" && (global.navigator.maxTouchPoints || 0) > 1);
       } catch (eApple) {}
-      if (apple && clearBottom < 52) clearBottom = 52;
-      var useH = Math.max(1, h - clearBottom);
-      overlay.style.top = top + "px";
-      overlay.style.left = left + "px";
-      overlay.style.width = w + "px";
-      overlay.style.height = useH + "px";
-      overlay.style.right = "auto";
-      overlay.style.bottom = "auto";
-      overlay.style.background = "transparent";
-      overlay.style.padding = "0";
-      dim.style.bottom = "0";
+      // Safari 底栏叠在可视区底部：遮罩与变暗层都要上收，不能涂到这一带。
+      var clearBottom = apple ? 64 : 0;
+      try {
+        var layoutH = Math.round((document.documentElement && document.documentElement.clientHeight) || global.innerHeight || 0);
+        if (layoutH > h) clearBottom = Math.max(clearBottom, Math.min(88, layoutH - h));
+      } catch (eClear) {}
+      try {
+        var gap = Math.round((global.innerHeight || 0) - h - top);
+        if (gap > 0) clearBottom = Math.max(clearBottom, Math.min(88, gap));
+      } catch (eGap) {}
+      if (apple && clearBottom < 72) clearBottom = 72;
+      var useH = Math.max(160, h - clearBottom);
+      setImp(overlay, "top", top + "px");
+      setImp(overlay, "left", left + "px");
+      setImp(overlay, "right", "auto");
+      setImp(overlay, "bottom", "auto");
+      setImp(overlay, "width", w + "px");
+      setImp(overlay, "height", useH + "px");
+      setImp(overlay, "max-height", useH + "px");
+      setImp(overlay, "background", "transparent");
+      setImp(overlay, "padding", "0");
+      setImp(overlay, "pointer-events", "none");
+      setImp(overlay, "transform", "none");
+      setImp(overlay, "-webkit-transform", "none");
+      // 变暗层高度短一截，底部整条留给页面 + Safari 毛玻璃。
+      var dimH = Math.max(120, useH - (apple ? 12 : 0));
+      setImp(dim, "top", "0");
+      setImp(dim, "left", "0");
+      setImp(dim, "right", "0");
+      setImp(dim, "bottom", "auto");
+      setImp(dim, "height", dimH + "px");
+      setImp(panel, "pointer-events", "auto");
     }
 
     function onViewportChange() {
@@ -728,6 +738,7 @@
       // 无关闭键：只有滑动成功（passed）才能撤掉遮罩。
       if (!global.__tgOpen || !passed) return;
       global.__tgOpen = false;
+      try { global.__tgGate = false; } catch (eGate) {}
       try { observer.disconnect(); } catch (e) {}
       try {
         if (global.visualViewport) {
@@ -737,11 +748,28 @@
         global.removeEventListener("resize", onViewportChange);
         global.removeEventListener("orientationchange", onViewportChange);
       } catch (e2) {}
-      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-      if (style.parentNode) style.parentNode.removeChild(style);
+      try {
+        for (var hi = 0; hi < holdNames.length; hi += 1) {
+          document.removeEventListener(holdNames[hi], hold, true);
+        }
+      } catch (eHold) {}
+      try {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      } catch (eRm) {}
+      try {
+        var leftover = document.getElementById("tg-gate");
+        if (leftover && leftover.parentNode) leftover.parentNode.removeChild(leftover);
+      } catch (eLeft) {}
+      try {
+        if (style.parentNode) style.parentNode.removeChild(style);
+        var st = document.getElementById("tg-gate-style");
+        if (st && st.parentNode) st.parentNode.removeChild(st);
+      } catch (eSt) {}
       restoreFrames();
-      root.style.overflow = htmlOverflow;
-      if (document.body) document.body.style.overflow = bodyOverflow;
+      try {
+        root.style.removeProperty("overflow");
+        if (document.body) document.body.style.removeProperty("overflow");
+      } catch (eOv) {}
       try { root.removeAttribute("data-tg-gate"); } catch (e) {}
     }
 
@@ -936,13 +964,17 @@
         event.stopPropagation();
         return;
       }
+      // 绝不拦截 touch/wheel：否则页面拉动会停，底部毛玻璃也没有滚动内容可透。
+      if (event.type === "touchstart" || event.type === "touchmove" || event.type === "touchend" || event.type === "wheel" || event.type === "scroll") return;
       var target = event.target;
-      if (target && overlay.contains(target)) return;
+      if (target && (target === panel || panel.contains(target))) return;
+      // 只拦页面点击，避免未滑过就点站内按钮。
       event.preventDefault();
       event.stopPropagation();
     }
 
-    ["click", "mousedown", "mouseup", "pointerdown", "touchstart", "touchend", "keydown", "keyup", "contextmenu", "wheel", "auxclick"].forEach(function (name) {
+    var holdNames = ["click", "mousedown", "mouseup", "pointerdown", "keydown", "keyup", "contextmenu", "auxclick"];
+    holdNames.forEach(function (name) {
       document.addEventListener(name, hold, true);
     });
 
