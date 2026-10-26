@@ -4,5 +4,6 @@
 android/*/.cxx/
 *.iml
 .idea/
-dist/*-????????.zip
-dist/*-????????-????????.zip
+# rev-suffixed archives from git-pack.sh (keep stable names)
+dist/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].zip
+dist/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].zip
