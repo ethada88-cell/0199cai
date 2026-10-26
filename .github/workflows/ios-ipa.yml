@@ -1,0 +1,218 @@
+# Build signed iOS IPA on GitHub-hosted macOS runners.
+# Requires repository Secrets — see online-cs/deploy/mobile/ios/GITHUB-IPA.md
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Which shell to build
+        required: true
+        default: both
+        type: choice
+        options:
+          - app0199
+          - seat0199
+          - both
+      export_method:
+        description: IPA export method (must match cert + profile)
+        required: true
+        default: ad-hoc
+        type: choice
+        options:
+          - ad-hoc
+          - development
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Resolve matrix
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.set.outputs.apps }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ inputs.app }}" = "both" ]; then
+            echo 'apps=["app0199","seat0199"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apps=["${{ inputs.app }}"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  ipa:
+    name: IPA ${{ matrix.app }}
+    needs: prepare
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.prepare.outputs.apps) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require signing secrets
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          missing=0
+          for k in IOS_CERTIFICATE_P12_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROVISION_PROFILE_BASE64 IOS_TEAM_ID KEYCHAIN_PASSWORD; do
+            if [ -z "${!k}" ]; then
+              echo "::error::Missing secret: $k — see online-cs/deploy/mobile/ios/GITHUB-IPA.md"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Select project
+        id: sel
+        run: |
+          case "${{ matrix.app }}" in
+            app0199)
+              echo "project=online-cs/deploy/mobile/ios/App0199/App0199/App0199.xcodeproj" >> "$GITHUB_OUTPUT"
+              echo "scheme=App0199" >> "$GITHUB_OUTPUT"
+              echo "bundle=com.ojy0871.app0199" >> "$GITHUB_OUTPUT"
+              echo "ipa_name=App0199" >> "$GITHUB_OUTPUT"
+              ;;
+            seat0199)
+              echo "project=online-cs/deploy/mobile/ios/Seat0199/Seat0199/Seat0199.xcodeproj" >> "$GITHUB_OUTPUT"
+              echo "scheme=Seat0199" >> "$GITHUB_OUTPUT"
+              echo "bundle=com.ojy0871.seat0199" >> "$GITHUB_OUTPUT"
+              echo "ipa_name=Seat0199" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unknown app ${{ matrix.app }}" >&2
+              exit 1
+              ;;
+          esac
+          if [ "${{ inputs.export_method }}" = "development" ]; then
+            echo "sign_identity=Apple Development" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign_identity=Apple Distribution" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import certificate and provisioning profile
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/build_certificate.p12"
+          PP_PATH="$RUNNER_TEMP/build.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo "$IOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          echo "$IOS_PROVISION_PROFILE_BASE64" | base64 --decode > "$PP_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i "$PP_PATH")")
+          NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' /dev/stdin <<< "$(security cms -D -i "$PP_PATH")")
+          cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+          echo "PROVISION_UUID=$UUID" >> "$GITHUB_ENV"
+          echo "PROVISION_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "Imported profile: $NAME ($UUID)"
+
+      - name: Write export options
+        env:
+          OUT: ${{ runner.temp }}/ExportOptions.plist
+          METHOD: ${{ inputs.export_method }}
+          TEAM: ${{ secrets.IOS_TEAM_ID }}
+          BUNDLE: ${{ steps.sel.outputs.bundle }}
+          PROFILE: ${{ env.PROVISION_NAME }}
+        run: |
+          python3 <<'PY'
+          import os
+          from pathlib import Path
+          out = Path(os.environ["OUT"])
+          method = os.environ["METHOD"]
+          team = os.environ["TEAM"]
+          bundle = os.environ["BUNDLE"]
+          profile = os.environ["PROFILE"]
+          out.write_text(
+              f"""<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          \t<key>method</key>
+          \t<string>{method}</string>
+          \t<key>teamID</key>
+          \t<string>{team}</string>
+          \t<key>signingStyle</key>
+          \t<string>manual</string>
+          \t<key>provisioningProfiles</key>
+          \t<dict>
+          \t\t<key>{bundle}</key>
+          \t\t<string>{profile}</string>
+          \t</dict>
+          \t<key>compileBitcode</key>
+          \t<false/>
+          \t<key>stripSwiftSymbols</key>
+          \t<true/>
+          \t<key>thinning</key>
+          \t<string>&lt;none&gt;</string>
+          </dict>
+          </plist>
+          """,
+              encoding="utf-8",
+          )
+          print(out.read_text())
+          PY
+          echo "EXPORT_OPTIONS=$OUT" >> "$GITHUB_ENV"
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Archive
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          ARCHIVE_PATH="$RUNNER_TEMP/${{ steps.sel.outputs.ipa_name }}.xcarchive"
+          echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
+          xcodebuild \
+            -project "${{ steps.sel.outputs.project }}" \
+            -scheme "${{ steps.sel.outputs.scheme }}" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$ARCHIVE_PATH" \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="${{ steps.sel.outputs.sign_identity }}" \
+            PROVISIONING_PROFILE="$PROVISION_UUID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROVISION_NAME" \
+            archive
+
+      - name: Export IPA
+        run: |
+          EXPORT_DIR="$RUNNER_TEMP/ipa-out"
+          mkdir -p "$EXPORT_DIR"
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_DIR" \
+            -exportOptionsPlist "$EXPORT_OPTIONS"
+          ls -la "$EXPORT_DIR"
+          IPA=$(find "$EXPORT_DIR" -name '*.ipa' | head -1)
+          test -n "$IPA"
+          cp "$IPA" "$RUNNER_TEMP/${{ steps.sel.outputs.ipa_name }}.ipa"
+          echo "IPA_FILE=$RUNNER_TEMP/${{ steps.sel.outputs.ipa_name }}.ipa" >> "$GITHUB_ENV"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.sel.outputs.ipa_name }}-ipa
+          path: ${{ env.IPA_FILE }}
+          if-no-files-found: error
+          retention-days: 14

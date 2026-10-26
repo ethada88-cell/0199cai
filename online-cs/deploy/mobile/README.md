@@ -63,7 +63,8 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 ## iOS IPA
 
-本环境是 Linux，**无法产出已签名 IPA**。请用 Mac + Xcode：
+本 Cloud Agent 是 Linux，本地打不出已签名 IPA。可用：
 
-1. 打开 `ios/App0199/App0199/App0199.xcodeproj` 或 `ios/Seat0199/Seat0199/Seat0199.xcodeproj`
-2. 选择 Apple Team → Product → Archive → 导出 IPA
+1. **GitHub Actions（推荐）**：见 `ios/GITHUB-IPA.md`  
+   推送到 GitHub 后配置证书 Secrets，在 Actions 里跑 **Build iOS IPA**，产物在 Artifacts。
+2. **本机 Mac + Xcode**：打开 `ios/App0199/.../App0199.xcodeproj` 或 `ios/Seat0199/.../Seat0199.xcodeproj` → Archive → 导出 IPA

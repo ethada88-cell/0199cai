@@ -13,4 +13,4 @@
 
 - Android：app0199-release.apk 、 seat0199-release.apk
 - 源码：mobile-0199-all.zip 、 *-android-src.zip 、 *-ios-src.zip
-- iOS IPA：需 Mac + Xcode Archive（Linux 环境打不出已签名 IPA）
+- iOS IPA：用 GitHub Actions（见 ios/GITHUB-IPA.md）或本机 Mac + Xcode；Linux 打不出已签名 IPA
