@@ -26,6 +26,8 @@ type SourceBucket = { fake: number; farm?: number; crawler?: number; other?: num
 type DayStat = {
   real?: number;
   fake: number;
+  /** 当日该站假量去重 IP 数；与 fake-ips.json 同步，不随 events 截断丢失。 */
+  fakeIps?: number;
   farm?: number;
   crawler?: number;
   other?: number;
@@ -201,7 +203,7 @@ function isSoftSuspect(event: StoredEvent) {
 }
 
 function emptyStat(): DayStat {
-  return { fake: 0, farm: 0, crawler: 0, other: 0, popupShown: 0, popupClosed: 0, slidePassed: 0, suspect: 0, sources: {} };
+  return { fake: 0, fakeIps: 0, farm: 0, crawler: 0, other: 0, popupShown: 0, popupClosed: 0, slidePassed: 0, suspect: 0, sources: {} };
 }
 
 function classesOf(event: StoredEvent) {
@@ -321,6 +323,7 @@ function dropNonAdFake(days: DayFile, siteKey: string) {
 function rebuildDays(accountId: string, siteKey: string): DayFile {
   const { account, key } = locate(accountId, siteKey);
   const days: DayFile = {};
+  const fakeIpSets = new Map<string, Set<string>>();
   rebuildDepth += 1;
   try {
     for (const event of loadEvents(account, key)) {
@@ -331,6 +334,13 @@ function rebuildDays(accountId: string, siteKey: string): DayFile {
       addClass(stat, fakeSourceHost(event), classesOf(event));
       if (event.popupShown) stat.popupShown += 1;
       if (event.popupClosed) stat.popupClosed += 1;
+      const ip = (event.ip || "").trim();
+      if (ip) {
+        const set = fakeIpSets.get(day) || new Set<string>();
+        set.add(ip);
+        fakeIpSets.set(day, set);
+        stat.fakeIps = set.size;
+      }
       days[day] = stat;
     }
   } finally {
@@ -504,6 +514,7 @@ function touchDay(accountId: string, siteKey: string, day: string, edit: (stat: 
   const prev = days[day] || emptyStat();
   const before = {
     fake: prev.fake || 0,
+    fakeIps: prev.fakeIps || 0,
     real: prev.real || 0,
     suspect: prev.suspect || 0,
     farm: prev.farm || 0,
@@ -519,6 +530,7 @@ function touchDay(accountId: string, siteKey: string, day: string, edit: (stat: 
   saveDays(accountId, siteKey);
   bumpLiveDays(accountId, day, {
     fake: (stat.fake || 0) - before.fake,
+    fakeIps: (stat.fakeIps || 0) - before.fakeIps,
     real: (stat.real || 0) - before.real,
     suspect: (stat.suspect || 0) - before.suspect,
     farm: (stat.farm || 0) - before.farm,
@@ -1265,6 +1277,9 @@ function rememberFakeIp(accountId: string, siteKey: string, day: string, ip: str
   fakeIpFileDirty.add(cacheKey);
   scheduleIpFileFlush();
   bumpAccountIp(accountId, day, "fake", value, 1);
+  touchDay(accountId, siteKey, day, (stat) => {
+    stat.fakeIps = Math.max(stat.fakeIps || 0, list.length + 1);
+  });
   markSiteDirty(accountId, siteKey);
 }
 
@@ -2167,6 +2182,7 @@ function emptyHead(account: string, accountId: string, site: string): SiteHead {
 function summarizeSite(accountId: string, username: string, siteKey: string, from: string, to: string, withRows: boolean): SiteHead | null {
   const days = loadDays(accountId, siteKey);
   let fake = 0;
+  let dayFakeIps = 0;
   let suspect = 0;
   let farm = 0;
   let crawler = 0;
@@ -2176,6 +2192,7 @@ function summarizeSite(accountId: string, username: string, siteKey: string, fro
   for (const [day, stat] of Object.entries(days)) {
     if (day < from || day > to || !stat || typeof stat !== "object") continue;
     fake += Math.max(0, stat.fake || 0);
+    dayFakeIps += Math.max(0, stat.fakeIps || 0);
     suspect += Math.max(0, stat.suspect || 0);
     realPv += Math.max(0, stat.real || 0);
     farm += Math.max(0, stat.farm || 0);
@@ -2199,12 +2216,21 @@ function summarizeSite(accountId: string, username: string, siteKey: string, fro
   }
   const partIps: Partial<Record<VerdictFilter, number>> = {};
   for (const tag of PAGE_VERDICTS) partIps[tag] = ipSets[tag]?.size || 0;
+  const fileFakeIps = (() => {
+    let n = 0;
+    for (const [day, list] of Object.entries(loadFakeIps(accountId, siteKey))) {
+      if (day < from || day > to) continue;
+      n += list.length;
+    }
+    return n;
+  })();
   return {
     account: username,
     accountId,
     site: siteKey,
     fake,
-    fakeIps: partIps.fake || 0,
+    // events/rollup 会被截断；优先用日账本 / fake-ips 名单里的去重数。
+    fakeIps: Math.max(partIps.fake || 0, dayFakeIps, fileFakeIps),
     suspect,
     suspectIps: suspectIpCount(accountId, siteKey, from, to),
     realPv,
@@ -2319,6 +2345,7 @@ function priorOverviewBundle(key: string): Bundle | null {
 
 type LiveDayTot = {
   fake: number;
+  fakeIps: number;
   real: number;
   suspect: number;
   farm: number;
@@ -2348,11 +2375,12 @@ function setTotalsFlushTimer(timer: ReturnType<typeof setTimeout> | null) {
 }
 
 function emptyLiveDay(): LiveDayTot {
-  return { fake: 0, real: 0, suspect: 0, farm: 0, crawler: 0, other: 0, slidePassed: 0, popupShown: 0 };
+  return { fake: 0, fakeIps: 0, real: 0, suspect: 0, farm: 0, crawler: 0, other: 0, slidePassed: 0, popupShown: 0 };
 }
 
 function applyLiveDelta(cur: LiveDayTot, delta: LiveDelta) {
   if (delta.fake) cur.fake = Math.max(0, cur.fake + delta.fake);
+  if (delta.fakeIps) cur.fakeIps = Math.max(0, (cur.fakeIps || 0) + delta.fakeIps);
   if (delta.real) cur.real = Math.max(0, cur.real + delta.real);
   if (delta.suspect) cur.suspect = Math.max(0, cur.suspect + delta.suspect);
   if (delta.farm) cur.farm = Math.max(0, cur.farm + delta.farm);
@@ -2438,6 +2466,7 @@ function rebuildAccountTotals(accountId: string, force = false) {
           if (!stat || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
           const cur = byDay[day] || emptyLiveDay();
           cur.fake += Math.max(0, stat.fake || 0);
+          cur.fakeIps += Math.max(0, stat.fakeIps || 0);
           cur.real += Math.max(0, stat.real || 0);
           cur.suspect += Math.max(0, stat.suspect || 0);
           cur.farm += Math.max(0, stat.farm || 0);
@@ -2486,8 +2515,8 @@ function ensureAccountTotals(accountId: string) {
 
 /** 顶部 PV：读账号 day-totals，O(天数)。重建账本时仍用内存里的旧合计，避免卡片掉回站点表的旧数字。 */
 function fastPvTotals(accounts: { id: string }[], from: string, to: string): Partial<BundleTotals> | null {
-  if (!accounts.length) return { fake: 0, realPv: 0, suspect: 0, farm: 0, crawler: 0, other: 0, slidePassed: 0, popupShown: 0 };
-  const out = { fake: 0, realPv: 0, suspect: 0, farm: 0, crawler: 0, other: 0, slidePassed: 0, popupShown: 0 };
+  if (!accounts.length) return { fake: 0, fakeIps: 0, realPv: 0, suspect: 0, farm: 0, crawler: 0, other: 0, slidePassed: 0, popupShown: 0 };
+  const out = { fake: 0, fakeIps: 0, realPv: 0, suspect: 0, farm: 0, crawler: 0, other: 0, slidePassed: 0, popupShown: 0 };
   let any = false;
   for (const account of accounts) {
     const id = normalizeAccountId(account.id);
@@ -2499,6 +2528,7 @@ function fastPvTotals(accounts: { id: string }[], from: string, to: string): Par
     for (const [day, tot] of Object.entries(file)) {
       if (day < from || day > to || !tot) continue;
       out.fake += tot.fake || 0;
+      out.fakeIps += tot.fakeIps || 0;
       out.realPv += tot.real || 0;
       out.suspect += tot.suspect || 0;
       out.farm += tot.farm || 0;
@@ -2514,7 +2544,7 @@ function fastPvTotals(accounts: { id: string }[], from: string, to: string): Par
 function bumpLiveDays(accountId: string, day: string, delta: LiveDelta) {
   const account = normalizeAccountId(accountId);
   if (!account || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
-  if (!delta.fake && !delta.real && !delta.suspect && !delta.farm && !delta.crawler && !delta.other && !delta.slidePassed && !delta.popupShown) {
+  if (!delta.fake && !delta.fakeIps && !delta.real && !delta.suspect && !delta.farm && !delta.crawler && !delta.other && !delta.slidePassed && !delta.popupShown) {
     return;
   }
   if (!accountTotalsReady.has(account)) {
@@ -2974,7 +3004,8 @@ function withLiveTotals(accounts: { id: string; username: string }[], from: stri
       // 不能只用 bundle 里未扫完的 heads，否则大账号会出现「PV 全量、IP 只扫到一小截」。
       realIps: ips?.realIps ?? bundle.totals.realIps,
       suspectIps: ips?.suspectIps ?? bundle.totals.suspectIps,
-      fakeIps: ips?.fakeIps ?? bundle.totals.fakeIps,
+      // IP假量优先 day-totals.fakeIps（不随 events 截断）；否则退回 ip-totals / 站点扫表。
+      fakeIps: (live?.fakeIps || 0) > 0 ? live?.fakeIps : ips?.fakeIps ?? bundle.totals.fakeIps,
     },
   };
 }
